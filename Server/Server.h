@@ -32,9 +32,12 @@ struct PlayerCommand {
 class CServer {
 private:
     SOCKET serverSocket;
-    sockaddr_in serverAddr;
+    struct sockaddr_in serverAddr;
     int clientAddrSize;
-    std::unordered_map<int, PlayerState> players; // 플레이어 상태 저장
+    int nextPlayerId = 1;  // 플레이어 ID 자동 증가 변수
+
+    std::unordered_map<std::string, int> clientList;  // 클라이언트 목록 (IP:PORT → PlayerID 매핑)
+    std::unordered_map<int, PlayerState> players;  // 플레이어 상태 관리
 
 public:
     CServer();

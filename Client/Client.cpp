@@ -10,7 +10,7 @@ void receiveMessages(SOCKET clientSocket) {
         int receivedBytes = recvfrom(clientSocket, buffer, BUFFER_SIZE, 0, NULL, NULL);
 
         if (receivedBytes > 0) {
-            std::cout << "\n[서버 동기화] " << buffer << std::endl;
+            std::cout << "\n [서버 업데이트] " << buffer << std::endl;
         }
     }
 }
