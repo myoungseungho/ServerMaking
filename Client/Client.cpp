@@ -4,13 +4,18 @@
 
 void receiveMessages(SOCKET clientSocket) {
     char buffer[BUFFER_SIZE];
+    std::string lastMessage = ""; //  마지막으로 받은 메시지 저장
 
     while (true) {
         memset(buffer, 0, BUFFER_SIZE);
         int receivedBytes = recvfrom(clientSocket, buffer, BUFFER_SIZE, 0, NULL, NULL);
 
         if (receivedBytes > 0) {
-            std::cout << "\n [서버 업데이트] " << buffer << std::endl;
+            std::string currentMessage(buffer);
+            if (currentMessage != lastMessage) { //  동일한 메시지는 무시
+                std::cout << "\n [서버 업데이트] " << buffer << std::endl;
+                lastMessage = currentMessage;
+            }
         }
     }
 }

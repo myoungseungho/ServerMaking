@@ -36,72 +36,58 @@ void CServer::storeClientInfo(sockaddr_in clientAddr, int& playerId) {
     inet_ntop(AF_INET, &clientAddr.sin_addr, clientIP, INET_ADDRSTRLEN);
     std::string clientKey = std::string(clientIP) + ":" + std::to_string(ntohs(clientAddr.sin_port));
 
-    // 이미 등록된 클라이언트인지 확인
     if (clientList.find(clientKey) != clientList.end()) {
-        playerId = clientList[clientKey];  // 기존 플레이어 ID 재사용
+        playerId = clientList[clientKey].id; //  기존 플레이어 ID 재사용
     }
     else {
-        playerId = nextPlayerId++;  // 새로운 플레이어 ID 할당
-        clientList[clientKey] = playerId;  // 클라이언트 등록
-        players[playerId] = { playerId, 0, 0, 100, 10, false }; // 초기 상태 설정
-
+        playerId = nextPlayerId++;
+        clientList[clientKey] = { clientAddr, playerId }; //  클라이언트 주소 & ID 함께 저장
         std::cout << "새 클라이언트 접속: 플레이어 " << playerId << " (" << clientKey << ")" << std::endl;
     }
 }
-
 // 클라이언트 명령어 처리
 void CServer::processCommand(const PlayerCommand& command) {
     if (players.find(command.playerId) == players.end()) {
         registerPlayer(command.playerId);
     }
 
-    std::ostringstream logMessage;
-
     if (command.action == "MOVE") {
         players[command.playerId].x += 1;
-        logMessage << " Player " << command.playerId << " 이동! 위치: ("
-            << players[command.playerId].x << ", "
-            << players[command.playerId].y << ")";
     }
     else if (command.action == "ATTACK") {
-        logMessage << " Player " << command.playerId << " 공격!";
+        // 공격 로직 (추가 가능)
     }
     else if (command.action == "PICKUP") {
         players[command.playerId].hasItem = true;
-        logMessage << " Player " << command.playerId << " 아이템 획득!";
     }
 
-    std::string finalMessage = logMessage.str();
-
-    // 행동이 발생했음을 즉시 모든 클라이언트에게 알림
-    if (!finalMessage.empty()) {
-        broadcastMessage(finalMessage);
-    }
-
-    // 모든 플레이어 상태를 동기화
+    //  여기서 메시지 전송을 제거하고 오직 `broadcastPlayerStates()`에서만 처리
     broadcastPlayerStates();
 }
 
+
 // 모든 클라이언트에게 플레이어 상태 브로드캐스트
 void CServer::broadcastPlayerStates() {
-    for (auto& player : players) {
-        std::ostringstream message;
-        message << " Player " << player.second.id
+    std::ostringstream message;
+    message << "[서버 업데이트] ";
+
+    for (auto& player : players) {  //  모든 플레이어의 상태를 하나의 메시지에 추가
+        message << "Player " << player.second.id
             << " 위치: (" << player.second.x << ", "
             << player.second.y << ") "
             << "HP: " << player.second.hp << " "
-            << (player.second.hasItem ? "[아이템 보유]" : "[아이템 없음]");
-
-        // 모든 클라이언트에게 전송
-        broadcastMessage(message.str());
+            << (player.second.hasItem ? "[아이템 보유] " : "[아이템 없음] ");
     }
-}
 
+    broadcastMessage(message.str()); //  최종 메시지를 한 번만 전송
+}
 // 메시지를 모든 클라이언트에게 브로드캐스트
 void CServer::broadcastMessage(const std::string& message) {
-    for (auto& player : players) {
+    for (auto& client : clientList) {
+        sockaddr_in clientAddr = client.second.addr; //  올바르게 클라이언트 주소 가져오기
+
         sendto(serverSocket, message.c_str(), message.length() + 1, 0,
-            (struct sockaddr*)&serverAddr, sizeof(serverAddr));
+            (struct sockaddr*)&clientAddr, sizeof(clientAddr));
     }
 }
 

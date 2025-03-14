@@ -29,6 +29,11 @@ struct PlayerCommand {
     std::string action; // "MOVE", "ATTACK", "PICKUP"
 };
 
+struct ClientInfo {
+    sockaddr_in addr;  // 클라이언트의 네트워크 주소
+    int id;            // 클라이언트 ID
+};
+
 class CServer {
 private:
     SOCKET serverSocket;
@@ -36,8 +41,8 @@ private:
     int clientAddrSize;
     int nextPlayerId = 1;  // 플레이어 ID 자동 증가 변수
 
-    std::unordered_map<std::string, int> clientList;  // 클라이언트 목록 (IP:PORT → PlayerID 매핑)
-    std::unordered_map<int, PlayerState> players;  // 플레이어 상태 관리
+    std::unordered_map<std::string, ClientInfo> clientList;
+    std::unordered_map<int, PlayerState> players;  // 플레이어 상태 저장
 
 public:
     CServer();
