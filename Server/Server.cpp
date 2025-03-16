@@ -4,6 +4,7 @@
 CServer::CServer() {
     WSAData wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
+    //SOCK_DGRAM이면 UDP, SOCK_STREAM이면 TCP임
     serverSocket = socket(AF_INET, SOCK_DGRAM, 0);
 
     serverAddr.sin_family = AF_INET;
@@ -71,7 +72,7 @@ void CServer::broadcastPlayerStates() {
     std::ostringstream message;
     message << "[서버 업데이트] ";
 
-    for (auto& player : players) {  //  모든 플레이어의 상태를 하나의 메시지에 추가
+    for (auto& player : players) {
         message << "Player " << player.second.id
             << " 위치: (" << player.second.x << ", "
             << player.second.y << ") "
@@ -79,8 +80,27 @@ void CServer::broadcastPlayerStates() {
             << (player.second.hasItem ? "[아이템 보유] " : "[아이템 없음] ");
     }
 
-    broadcastMessage(message.str()); //  최종 메시지를 한 번만 전송
+    std::string finalMessage = message.str();
+    int totalBytesSent = 0;
+
+    for (auto& client : clientList) {
+        sockaddr_in clientAddr = client.second.addr;
+        int sentBytes = sendto(serverSocket, finalMessage.c_str(), finalMessage.length() + 1, 0,
+            (struct sockaddr*)&clientAddr, sizeof(clientAddr));
+        totalBytesSent += sentBytes;
+    }
+
+    // 5초마다 전송된 총 데이터량 출력
+    static auto lastPrintTime = std::chrono::high_resolution_clock::now();
+    auto now = std::chrono::high_resolution_clock::now();
+    if (std::chrono::duration_cast<std::chrono::seconds>(now - lastPrintTime).count() >= 5) {
+        std::cout << "\n===== 서버 네트워크 사용량 =====\n";
+        std::cout << "총 데이터 전송량 (5초 기준): " << totalBytesSent / 1024.0 << " KB\n";
+        std::cout << "=================================\n";
+        lastPrintTime = now;
+    }
 }
+
 // 메시지를 모든 클라이언트에게 브로드캐스트
 void CServer::broadcastMessage(const std::string& message) {
     for (auto& client : clientList) {

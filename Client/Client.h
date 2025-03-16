@@ -5,6 +5,7 @@
 #include <winsock2.h>
 #include <iostream>
 #include <ws2tcpip.h>  // ← 추가 (inet_pton() 사용 가능)
+#include "vector"
 #pragma comment(lib, "ws2_32.lib")
 
 //기본적으로 127.0.0.1을 사용하면 "내 컴퓨터에서 실행되는 서버"에 연결 가능
