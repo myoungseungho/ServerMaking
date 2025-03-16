@@ -41,7 +41,7 @@ private:
     int clientAddrSize;
     int nextPlayerId = 1;  // 플레이어 ID 자동 증가 변수
 
-    std::unordered_map<std::string, ClientInfo> clientList;
+    std::vector<SOCKET> clientSockets;  //  클라이언트 소켓 목록 추가
     std::unordered_map<int, PlayerState> players;  // 플레이어 상태 저장
 
 public:
@@ -51,8 +51,10 @@ public:
     void registerPlayer(int playerId); // 새로운 플레이어 등록
     void processCommand(const PlayerCommand& command); // 클라이언트 입력 처리
     void broadcastPlayerStates(); // 모든 클라이언트에게 상태 동기화
-    void storeClientInfo(sockaddr_in clientAddr, int& playerId); // 클라이언트 저장
+    void storeClientInfo(SOCKET clientSocket);
     void broadcastMessage(const std::string& message); // 클라이언트에게 메시지 전송
+    void handleClient(SOCKET clientSocket);
+
 };
 
 #endif // SERVER_H

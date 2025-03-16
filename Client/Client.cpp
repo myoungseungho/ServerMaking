@@ -15,16 +15,21 @@ void receiveMessages(SOCKET clientSocket) {
         memset(buffer, 0, BUFFER_SIZE);
         auto startTime = std::chrono::high_resolution_clock::now(); // 전송 시작 시간 기록
 
-        int receivedBytes = recvfrom(clientSocket, buffer, BUFFER_SIZE, 0, NULL, NULL);
+        int receivedBytes = recv(clientSocket, buffer, BUFFER_SIZE, 0); // TCP에서는 recv() 사용
         auto endTime = std::chrono::high_resolution_clock::now(); // 수신 시간 기록
 
         if (receivedBytes > 0) {
             receivedPackets++;
-            //std::cout << "\n [서버 업데이트] " << buffer << std::endl;
 
             // RTT 계산
             long long rtt = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
             rttSamples.push_back(rtt);
+
+            //cout << "\n[서버 응답] " << buffer << endl;
+        }
+        else if (receivedBytes == 0) {
+            cout << "[서버 연결 종료]" << endl;
+            break;  // 서버가 연결을 종료한 경우 루프 탈출
         }
         else {
             lostPackets++;
@@ -50,11 +55,20 @@ void receiveMessages(SOCKET clientSocket) {
 CClient::CClient() {
     WSAData wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
-    clientSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    clientSocket = socket(AF_INET, SOCK_STREAM, 0);  // TCP 소켓 생성
 
     serverAddr.sin_family = AF_INET;
     inet_pton(AF_INET, SERVER_IP, &serverAddr.sin_addr);
     serverAddr.sin_port = htons(SERVER_PORT);
+
+    // TCP에서는 connect() 호출하여 서버와 연결 필요
+    if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+        cerr << "서버 연결 실패!" << endl;
+        closesocket(clientSocket);
+        WSACleanup();
+        exit(1);
+    }
+    cout << "서버에 연결되었습니다!" << endl;
 }
 
 CClient::~CClient() {
@@ -68,10 +82,10 @@ void CClient::start() {
 
     while (true) {
         // 초당 10번 "MOVE" 명령을 서버로 전송하여 부하를 발생시킴
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 50; i++) {
             const char* message = "MOVE";
-            sendto(clientSocket, message, strlen(message) + 1, 0, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));  // 100ms 마다 전송
+            send(clientSocket, message, strlen(message) + 1, 0); // TCP에서는 send() 사용
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));  // 100ms 마다 전송
         }
     }
 }

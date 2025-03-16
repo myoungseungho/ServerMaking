@@ -4,20 +4,17 @@
 CServer::CServer() {
     WSAData wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
-    //SOCK_DGRAM이면 UDP, SOCK_STREAM이면 TCP임
-    serverSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    serverSocket = socket(AF_INET, SOCK_STREAM, 0);  // TCP 소켓
 
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
     serverAddr.sin_port = htons(SERVER_PORT);
 
     bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
-    clientAddrSize = sizeof(sockaddr_in);
 
-    u_long mode = 1;
-    ioctlsocket(serverSocket, FIONBIO, &mode); // 논블로킹 모드 설정
+    listen(serverSocket, SOMAXCONN);  //  TCP에서는 listen() 추가 필요
 
-    std::cout << "UDP 서버 실행 중... 포트 " << SERVER_PORT << std::endl;
+    std::cout << "TCP 서버 실행 중... 포트 " << SERVER_PORT << std::endl;
 }
 
 CServer::~CServer() {
@@ -32,20 +29,11 @@ void CServer::registerPlayer(int playerId) {
 }
 
 // 클라이언트 정보를 저장하는 함수 (순번 할당)
-void CServer::storeClientInfo(sockaddr_in clientAddr, int& playerId) {
-    char clientIP[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &clientAddr.sin_addr, clientIP, INET_ADDRSTRLEN);
-    std::string clientKey = std::string(clientIP) + ":" + std::to_string(ntohs(clientAddr.sin_port));
-
-    if (clientList.find(clientKey) != clientList.end()) {
-        playerId = clientList[clientKey].id; //  기존 플레이어 ID 재사용
-    }
-    else {
-        playerId = nextPlayerId++;
-        clientList[clientKey] = { clientAddr, playerId }; //  클라이언트 주소 & ID 함께 저장
-        std::cout << "새 클라이언트 접속: 플레이어 " << playerId << " (" << clientKey << ")" << std::endl;
-    }
+void CServer::storeClientInfo(SOCKET clientSocket) {
+    clientSockets.push_back(clientSocket);  // TCP는 소켓을 기반으로 클라이언트 관리
+    std::cout << "새 클라이언트 접속! 총 클라이언트 수: " << clientSockets.size() << std::endl;
 }
+
 // 클라이언트 명령어 처리
 void CServer::processCommand(const PlayerCommand& command) {
     if (players.find(command.playerId) == players.end()) {
@@ -83,11 +71,9 @@ void CServer::broadcastPlayerStates() {
     std::string finalMessage = message.str();
     int totalBytesSent = 0;
 
-    for (auto& client : clientList) {
-        sockaddr_in clientAddr = client.second.addr;
-        int sentBytes = sendto(serverSocket, finalMessage.c_str(), finalMessage.length() + 1, 0,
-            (struct sockaddr*)&clientAddr, sizeof(clientAddr));
-        totalBytesSent += sentBytes;
+    for (auto& clientSocket : clientSockets) {  // 변경: UDP에서는 clientList, TCP에서는 clientSockets 사용
+        int sentBytes = send(clientSocket, finalMessage.c_str(), finalMessage.length() + 1, 0);
+        totalBytesSent += (sentBytes > 0) ? sentBytes : 0;
     }
 
     // 5초마다 전송된 총 데이터량 출력
@@ -103,35 +89,56 @@ void CServer::broadcastPlayerStates() {
 
 // 메시지를 모든 클라이언트에게 브로드캐스트
 void CServer::broadcastMessage(const std::string& message) {
-    for (auto& client : clientList) {
-        sockaddr_in clientAddr = client.second.addr; //  올바르게 클라이언트 주소 가져오기
+    for (auto& client : clientSockets) {
+        send(client, message.c_str(), message.length() + 1, 0);
+    }
+}
 
-        sendto(serverSocket, message.c_str(), message.length() + 1, 0,
-            (struct sockaddr*)&clientAddr, sizeof(clientAddr));
+void CServer::handleClient(SOCKET clientSocket) {
+    char buffer[BUFFER_SIZE];
+
+    while (true) {
+        memset(buffer, 0, BUFFER_SIZE);
+        int receivedBytes = recv(clientSocket, buffer, BUFFER_SIZE, 0);
+
+        if (receivedBytes <= 0) {
+            std::cout << "클라이언트 연결 종료" << std::endl;
+            closesocket(clientSocket);
+
+            //  연결이 끊긴 클라이언트는 리스트에서 삭제
+            clientSockets.erase(std::remove(clientSockets.begin(), clientSockets.end(), clientSocket), clientSockets.end());
+            return;
+        }
+
+        std::cout << "클라이언트 요청: " << buffer << std::endl;
+
+        // 모든 클라이언트에게 메시지 브로드캐스트
+        broadcastMessage(buffer);
     }
 }
 
 // 서버 실행 (메인 루프)
 void CServer::start() {
     char buffer[BUFFER_SIZE];
-    struct sockaddr_in clientAddr;
-    int playerId;
 
     while (true) {
-        memset(buffer, 0, BUFFER_SIZE);
-        int receivedBytes = recvfrom(serverSocket, buffer, BUFFER_SIZE, 0,
-            (struct sockaddr*)&clientAddr, &clientAddrSize);
+        struct sockaddr_in clientAddr;
+        int clientAddrSize = sizeof(clientAddr);
 
-        if (receivedBytes > 0) {
-            storeClientInfo(clientAddr, playerId);
-
-            std::string receivedMessage(buffer);
-            std::cout << "플레이어 [" << playerId << "] 요청: " << receivedMessage << std::endl;
-
-            PlayerCommand command = { playerId, receivedMessage };
-            processCommand(command); // 플레이어 명령어 처리
-            broadcastPlayerStates(); // 모든 클라이언트에게 상태 업데이트
+        SOCKET clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &clientAddrSize);
+        if (clientSocket == INVALID_SOCKET) {
+            std::cerr << "클라이언트 연결 실패" << std::endl;
+            continue;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        std::cout << "새로운 클라이언트 연결됨!" << std::endl;
+
+        //  클라이언트 소켓 리스트에 추가
+        clientSockets.push_back(clientSocket);
+
+        // 클라이언트와 통신을 위한 스레드 실행
+        std::thread clientThread(&CServer::handleClient, this, clientSocket);
+        clientThread.detach();
     }
 }
+
