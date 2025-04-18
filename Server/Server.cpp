@@ -1,5 +1,6 @@
 #include "Server.h"
 #include <cstring>
+#include <chrono>
 
 CServer::CServer() {
     WSAData wsa;
@@ -19,35 +20,17 @@ CServer::~CServer() {
     WSACleanup();
 }
 
-void CServer::start() {
-    char buffer[BUFFER_SIZE];
-    sockaddr_in clientAddr;
-    int addrLen = sizeof(clientAddr);
+int CServer::getClientNumber(sockaddr_in& addr) {
+    char ipStr[INET_ADDRSTRLEN];
+    InetNtopA(AF_INET, &addr.sin_addr, ipStr, sizeof(ipStr));
+    char key[64];
+    sprintf_s(key, sizeof(key), "%s:%d", ipStr, ntohs(addr.sin_port));
 
-    while (true) {
-        memset(buffer, 0, BUFFER_SIZE);
-        int bytes = recvfrom(serverSocket, buffer, BUFFER_SIZE, 0, (sockaddr*)&clientAddr, &addrLen);
-        if (bytes > 0) {
-            std::cout << "[클라] " << buffer << std::endl;
-
-            if (isNewClient(clientAddr)) {
-                clients.push_back(clientAddr);
-
-                int clientNumber = clients.size();
-                std::cout << "클라이언트 " << clientNumber << "번 입장" << std::endl;
-            }
-
-            broadcast(buffer, clientAddr);
-        }
+    if (clientIds.find(key) == clientIds.end()) {
+        clientIds[key] = (int)clientIds.size() + 1;
+        std::cout << "클라이언트 " << clientIds[key] << "번 입장" << std::endl;
     }
-}
-
-void CServer::broadcast(const char* msg, sockaddr_in sender) {
-    for (auto& client : clients) {
-        if (memcmp(&client, &sender, sizeof(sockaddr_in)) != 0) {
-            sendto(serverSocket, msg, strlen(msg) + 1, 0, (sockaddr*)&client, sizeof(client));
-        }
-    }
+    return clientIds[key];
 }
 
 bool CServer::isNewClient(sockaddr_in& addr) {
@@ -56,4 +39,43 @@ bool CServer::isNewClient(sockaddr_in& addr) {
             return false;
     }
     return true;
+}
+
+void CServer::start() {
+    using clock = std::chrono::high_resolution_clock;
+    const auto frameDuration = std::chrono::milliseconds(1000 / 60);
+
+    while (true) {
+        auto frameStart = clock::now();
+        std::vector<std::string> frameLogs;
+
+        // 프레임 동안 들어오는 모든 메시지 수신
+        while (clock::now() - frameStart < frameDuration) {
+            char buffer[BUFFER_SIZE];
+            sockaddr_in clientAddr;
+            int addrLen = sizeof(clientAddr);
+
+            int bytes = recvfrom(serverSocket, buffer, BUFFER_SIZE, 0,
+                (sockaddr*)&clientAddr, &addrLen);
+            if (bytes <= 0) continue;
+
+            if (isNewClient(clientAddr)) clients.push_back(clientAddr);
+
+            ClientMessage msg;
+            memcpy(&msg, buffer, sizeof(msg));
+            int id = getClientNumber(clientAddr);
+
+            char logBuf[128];
+            sprintf_s(logBuf, sizeof(logBuf),
+                "[서버][Frame] 클라이언트 %d 메시지 수신 → Seq:%d, Pos(%.1f,%.1f)",
+                id, msg.sequenceId, msg.posX, msg.posY);
+
+            frameLogs.push_back(logBuf);
+        }
+
+        // 프레임 종료 시 한꺼번에 로그 출력
+        std::cout << "----- 한 프레임 동안 수신된 메시지들 -----" << std::endl;
+        for (auto& line : frameLogs) std::cout << line << std::endl;
+        std::cout << "---------------------------------------" << std::endl;
+    }
 }

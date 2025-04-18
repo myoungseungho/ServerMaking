@@ -1,7 +1,6 @@
 ﻿#include "Client.h"
-#include <chrono>
-#include <string>
 #include <thread>
+#include <cstring>
 
 CClient::CClient() {
     WSAData wsa;
@@ -34,14 +33,18 @@ void CClient::start() {
         });
     recvThread.detach();
 
-    // ✅ 여기에 JOIN 전송
-    std::string join = "JOIN";
-    int sent = sendto(clientSocket,
-        join.c_str(),
-        (int)join.size() + 1,
-        0,
-        (sockaddr*)&serverAddr,
-        sizeof(serverAddr));
-    std::cout << "[클라] JOIN 전송: " << (sent > 0 ? "성공" : "실패(" + std::to_string(WSAGetLastError()) + ")") << std::endl;
+    // 1초 간격으로 메시지 전송
+    while (true) {
+        ClientMessage msg;
+        msg.clientId = 0; // 일단 0으로 고정 (서버에서 처리)
+        msg.sequenceId = sequenceId++;
+        msg.posX = posX += 1.0f;
+        msg.posY = posY;
+        msg.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
 
+        sendto(clientSocket, (char*)&msg, sizeof(msg), 0, (sockaddr*)&serverAddr, sizeof(serverAddr));
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(sendIntervalMs));
+    }
 }
