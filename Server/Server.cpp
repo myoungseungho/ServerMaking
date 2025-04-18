@@ -1,4 +1,3 @@
-// Server.cpp
 #include "Server.h"
 #include <cstring>
 #include <sstream>
@@ -16,7 +15,7 @@ CServer::CServer() {
     serverAddr.sin_port = htons(SERVER_PORT);
 
     bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
-    std::cout << "UDP 서버 실행 중..." << std::endl;
+    std::cout << "UDP Dedicated Server 실행 중..." << std::endl;
 }
 
 CServer::~CServer() {
@@ -27,32 +26,26 @@ CServer::~CServer() {
 int CServer::getClientNumber(const sockaddr_in& addr) {
     char ipStr[INET_ADDRSTRLEN];
     InetNtopA(AF_INET, &addr.sin_addr, ipStr, sizeof(ipStr));
-    char key[64];
-    sprintf_s(key, sizeof(key), "%s:%d", ipStr, ntohs(addr.sin_port));
-
+    char key[64]; sprintf_s(key, sizeof(key), "%s:%d", ipStr, ntohs(addr.sin_port));
     if (clientIds.find(key) == clientIds.end()) {
         clientIds[key] = (int)clientIds.size() + 1;
+        clientStates[clientIds[key]] = { 0,0 };
         std::cout << "클라이언트 " << clientIds[key] << "번 입장" << std::endl;
     }
     return clientIds[key];
 }
 
 bool CServer::isNewClient(const sockaddr_in& addr) {
-    for (auto& c : clients) {
-        if (memcmp(&c, &addr, sizeof(sockaddr_in)) == 0)
-            return false;
-    }
+    for (auto& c : clients) if (memcmp(&c, &addr, sizeof(addr)) == 0) return false;
     return true;
 }
 
 void CServer::broadcastStates() {
-    // 모든 클라이언트의 상태를 문자열로 직렬화
     std::ostringstream oss;
     for (auto& kv : clientStates) {
         oss << kv.first << ":(" << kv.second.first << "," << kv.second.second << ");";
     }
     std::string data = oss.str();
-
     for (auto& clientAddr : clients) {
         sendto(serverSocket, data.c_str(), data.size() + 1, 0,
             (sockaddr*)&clientAddr, sizeof(clientAddr));
@@ -61,11 +54,10 @@ void CServer::broadcastStates() {
 
 void CServer::start() {
     using clock = std::chrono::high_resolution_clock;
-    const auto frameDuration = std::chrono::milliseconds(1000 / LOGIC_HZ);   // 게임 로직 처리 주기 (60Hz)
-    const auto broadcastInterval = std::chrono::milliseconds(1000 / BROADCAST_HZ); // 브로드캐스트 주기 (20Hz)
+    const auto frameDuration = std::chrono::milliseconds(1000 / LOGIC_HZ);
+    const auto broadcastInterval = std::chrono::milliseconds(1000 / BROADCAST_HZ);
 
     auto broadcastTimer = clock::now();
-
 
     while (true) {
         auto frameStart = clock::now();
@@ -73,7 +65,7 @@ void CServer::start() {
         sockaddr_in clientAddr;
         int addrLen = sizeof(clientAddr);
 
-        // 프레임 동안 메시지 수신 및 상태 업데이트
+        // 로직 틱 (60Hz)
         while (clock::now() - frameStart < frameDuration) {
             int bytes = recvfrom(serverSocket, buffer, BUFFER_SIZE, 0,
                 (sockaddr*)&clientAddr, &addrLen);
@@ -81,15 +73,13 @@ void CServer::start() {
 
             if (isNewClient(clientAddr)) clients.push_back(clientAddr);
 
-            ClientMessage msg;
-            memcpy(&msg, buffer, sizeof(msg));
+            ClientCommand cmd;
+            memcpy(&cmd, buffer, sizeof(cmd));
             int id = getClientNumber(clientAddr);
-
-            // 상태 맵에 저장 (연산 처리)
-            clientStates[id] = { msg.posX, msg.posY };
+            processCommand(cmd, id);
         }
 
-        // 브로드캐스트 타이밍 확인 (20Hz)
+        // 브로드캐스트 틱 (20Hz)
         auto now = clock::now();
         if (now - broadcastTimer >= broadcastInterval) {
             broadcastStates();
