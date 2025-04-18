@@ -1,11 +1,15 @@
+// Server.cpp
 #include "Server.h"
 #include <cstring>
-#include <chrono>
+#include <sstream>
 
 CServer::CServer() {
     WSAData wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
     serverSocket = socket(AF_INET, SOCK_DGRAM, 0);
+
+    u_long nonBlocking = 1;
+    ioctlsocket(serverSocket, FIONBIO, &nonBlocking);
 
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
@@ -20,7 +24,7 @@ CServer::~CServer() {
     WSACleanup();
 }
 
-int CServer::getClientNumber(sockaddr_in& addr) {
+int CServer::getClientNumber(const sockaddr_in& addr) {
     char ipStr[INET_ADDRSTRLEN];
     InetNtopA(AF_INET, &addr.sin_addr, ipStr, sizeof(ipStr));
     char key[64];
@@ -33,12 +37,26 @@ int CServer::getClientNumber(sockaddr_in& addr) {
     return clientIds[key];
 }
 
-bool CServer::isNewClient(sockaddr_in& addr) {
+bool CServer::isNewClient(const sockaddr_in& addr) {
     for (auto& c : clients) {
         if (memcmp(&c, &addr, sizeof(sockaddr_in)) == 0)
             return false;
     }
     return true;
+}
+
+void CServer::broadcastStates() {
+    // 모든 클라이언트의 상태를 문자열로 직렬화
+    std::ostringstream oss;
+    for (auto& kv : clientStates) {
+        oss << kv.first << ":(" << kv.second.first << "," << kv.second.second << ");";
+    }
+    std::string data = oss.str();
+
+    for (auto& clientAddr : clients) {
+        sendto(serverSocket, data.c_str(), data.size() + 1, 0,
+            (sockaddr*)&clientAddr, sizeof(clientAddr));
+    }
 }
 
 void CServer::start() {
@@ -47,14 +65,12 @@ void CServer::start() {
 
     while (true) {
         auto frameStart = clock::now();
-        std::vector<std::string> frameLogs;
+        char buffer[BUFFER_SIZE];
+        sockaddr_in clientAddr;
+        int addrLen = sizeof(clientAddr);
 
-        // 프레임 동안 들어오는 모든 메시지 수신
+        // 프레임 동안 메시지 수신 및 상태 업데이트
         while (clock::now() - frameStart < frameDuration) {
-            char buffer[BUFFER_SIZE];
-            sockaddr_in clientAddr;
-            int addrLen = sizeof(clientAddr);
-
             int bytes = recvfrom(serverSocket, buffer, BUFFER_SIZE, 0,
                 (sockaddr*)&clientAddr, &addrLen);
             if (bytes <= 0) continue;
@@ -65,17 +81,11 @@ void CServer::start() {
             memcpy(&msg, buffer, sizeof(msg));
             int id = getClientNumber(clientAddr);
 
-            char logBuf[128];
-            sprintf_s(logBuf, sizeof(logBuf),
-                "[서버][Frame] 클라이언트 %d 메시지 수신 → Seq:%d, Pos(%.1f,%.1f)",
-                id, msg.sequenceId, msg.posX, msg.posY);
-
-            frameLogs.push_back(logBuf);
+            // 상태 맵에 저장 (연산 처리)
+            clientStates[id] = { msg.posX, msg.posY };
         }
 
-        // 프레임 종료 시 한꺼번에 로그 출력
-        std::cout << "----- 한 프레임 동안 수신된 메시지들 -----" << std::endl;
-        for (auto& line : frameLogs) std::cout << line << std::endl;
-        std::cout << "---------------------------------------" << std::endl;
+        // 연산된 상태 브로드캐스트
+        broadcastStates();
     }
 }

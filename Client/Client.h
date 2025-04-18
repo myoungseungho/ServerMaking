@@ -1,3 +1,4 @@
+// Client.h
 #pragma once
 #ifndef CLIENT_H
 #define CLIENT_H
@@ -27,7 +28,7 @@ private:
     int sequenceId = 0;
     float posX = 0.0f;
     float posY = 0.0f;
-    int sendIntervalMs = 10; // 전송 주기 (ms)
+    int sendIntervalMs = 1000;
 
 public:
     CClient();

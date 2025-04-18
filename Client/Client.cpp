@@ -1,4 +1,5 @@
-﻿#include "Client.h"
+﻿// Client.cpp
+#include "Client.h"
 #include <thread>
 #include <cstring>
 
@@ -28,22 +29,22 @@ void CClient::start() {
             memset(buffer, 0, BUFFER_SIZE);
             int bytes = recvfrom(clientSocket, buffer, BUFFER_SIZE, 0, (sockaddr*)&fromAddr, &fromLen);
             if (bytes > 0)
-                std::cout << "[서버]: " << buffer << std::endl;
+                std::cout << "[서버 브로드캐스트]: " << buffer << std::endl;
         }
         });
     recvThread.detach();
 
-    // 1초 간격으로 메시지 전송
     while (true) {
         ClientMessage msg;
-        msg.clientId = 0; // 일단 0으로 고정 (서버에서 처리)
+        msg.clientId = 0; // 서버에서 재할당
         msg.sequenceId = sequenceId++;
         msg.posX = posX += 1.0f;
         msg.posY = posY;
         msg.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
 
-        sendto(clientSocket, (char*)&msg, sizeof(msg), 0, (sockaddr*)&serverAddr, sizeof(serverAddr));
+        sendto(clientSocket, (char*)&msg, sizeof(msg), 0,
+            (sockaddr*)&serverAddr, sizeof(serverAddr));
 
         std::this_thread::sleep_for(std::chrono::milliseconds(sendIntervalMs));
     }
