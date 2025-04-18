@@ -21,15 +21,35 @@ CClient::~CClient() {
 }
 
 void CClient::start() {
+    // 수신 스레드: 서버 브로드캐스트 수신 및 파싱
     std::thread recvThread([this]() {
         char buffer[BUFFER_SIZE];
         sockaddr_in fromAddr;
         int fromLen = sizeof(fromAddr);
         while (true) {
             memset(buffer, 0, BUFFER_SIZE);
-            int bytes = recvfrom(clientSocket, buffer, BUFFER_SIZE, 0, (sockaddr*)&fromAddr, &fromLen);
-            if (bytes > 0)
-                std::cout << "[서버 브로드캐스트]: " << buffer << std::endl;
+            int bytes = recvfrom(clientSocket, buffer, BUFFER_SIZE, 0,
+                (sockaddr*)&fromAddr, &fromLen);
+            if (bytes <= 0) continue;
+
+            std::string data(buffer);
+            std::cout << "[서버 브로드캐스트]: " << data << std::endl;
+
+            // 파싱 예시: "1:(x,y);2:(x,y);"
+            size_t start = 0;
+            while (start < data.size()) {
+                size_t sep = data.find(';', start);
+                if (sep == std::string::npos) break;
+                std::string entry = data.substr(start, sep - start);
+                size_t colon = entry.find(':');
+                if (colon != std::string::npos) {
+                    int id = std::stoi(entry.substr(0, colon));
+                    float x = std::stof(entry.substr(colon + 2, entry.find(',') - (colon + 2)));
+                    float y = std::stof(entry.substr(entry.find(',') + 1, entry.find(')') - entry.find(',') - 1));
+                    std::cout << "  -> 클라이언트 " << id << " 위치: (" << x << ", " << y << ")" << std::endl;
+                }
+                start = sep + 1;
+            }
         }
         });
     recvThread.detach();

@@ -13,6 +13,7 @@
 #define SERVER_PORT 8888
 #define BUFFER_SIZE 512
 
+
 struct ClientMessage {
     int clientId;
     int sequenceId;
@@ -28,7 +29,7 @@ private:
     int sequenceId = 0;
     float posX = 0.0f;
     float posY = 0.0f;
-    int sendIntervalMs = 1000;
+    int sendIntervalMs = 10;
 
 public:
     CClient();

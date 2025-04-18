@@ -1,4 +1,3 @@
-// Server.h
 #pragma once
 #ifndef SERVER_H
 #define SERVER_H
@@ -14,6 +13,10 @@
 
 #define SERVER_PORT 8888
 #define BUFFER_SIZE 512
+
+// 서버 로직 및 브로드캐스트 주기 설정
+#define LOGIC_HZ 60       // 로직 처리 주기 (Hz)
+#define BROADCAST_HZ 60   // 브로드캐스트 주기 (Hz)
 
 struct ClientMessage {
     int clientId;

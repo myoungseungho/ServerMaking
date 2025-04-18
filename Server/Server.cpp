@@ -61,7 +61,11 @@ void CServer::broadcastStates() {
 
 void CServer::start() {
     using clock = std::chrono::high_resolution_clock;
-    const auto frameDuration = std::chrono::milliseconds(1000 / 60);
+    const auto frameDuration = std::chrono::milliseconds(1000 / LOGIC_HZ);   // 게임 로직 처리 주기 (60Hz)
+    const auto broadcastInterval = std::chrono::milliseconds(1000 / BROADCAST_HZ); // 브로드캐스트 주기 (20Hz)
+
+    auto broadcastTimer = clock::now();
+
 
     while (true) {
         auto frameStart = clock::now();
@@ -85,7 +89,11 @@ void CServer::start() {
             clientStates[id] = { msg.posX, msg.posY };
         }
 
-        // 연산된 상태 브로드캐스트
-        broadcastStates();
+        // 브로드캐스트 타이밍 확인 (20Hz)
+        auto now = clock::now();
+        if (now - broadcastTimer >= broadcastInterval) {
+            broadcastStates();
+            broadcastTimer = now;
+        }
     }
 }
