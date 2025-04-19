@@ -40,8 +40,8 @@ private:
     // === Debug Options ===
    // 토글 가능 디버깅 요소
     bool debugMessagesPerFrame = false;  // 한 프레임당 메시지 수 측정
-    bool debugPacketLoss = true;  // 패킷 손실률 측정
-    bool debugInputQueue = false;  // 입력 큐 깊이 및 대기 시간 측정
+    bool debugPacketLoss = false;  // 패킷 손실률 측정
+    bool debugInputQueue = true;  // 입력 큐 깊이 및 대기 시간 측정
 
     SOCKET serverSocket;
     sockaddr_in serverAddr;

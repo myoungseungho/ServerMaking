@@ -105,6 +105,13 @@ void CServer::start() {
                 expected = cmd.sequenceId + 1;
             }
 
+            if (debugInputQueue) {
+                long long now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
+                long long delay = now - cmd.timestamp;
+                std::cout << "[Debug] Client " << id << " Input delay: " << delay << " ms" << std::endl;
+            }
+
             processCommand(cmd, id);
             sendto(serverSocket, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
                 reinterpret_cast<sockaddr*>(&cl), len);
