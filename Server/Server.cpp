@@ -1,6 +1,7 @@
-#include "Server.h"
+ï»¿#include "Server.h"
 #include <cstring>
 #include <sstream>
+#include <conio.h>
 
 CServer::CServer() {
     WSAData wsa;
@@ -15,7 +16,7 @@ CServer::CServer() {
     serverAddr.sin_port = htons(SERVER_PORT);
 
     bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
-    std::cout << "UDP Dedicated Server ½ÇÇà Áß..." << std::endl;
+    std::cout << "UDP Dedicated Server ì‹¤í–‰ ì¤‘..." << std::endl;
 }
 
 CServer::~CServer() {
@@ -23,24 +24,24 @@ CServer::~CServer() {
     WSACleanup();
 }
 
-//Å¬¶ó ÁÖ¼Ò -> °íÀ¯¹øÈ£ id ¸ÅÇÎ
+//í´ë¼ ì£¼ì†Œ -> ê³ ìœ ë²ˆí˜¸ id ë§¤í•‘
 int CServer::getClientNumber(const sockaddr_in& addr) {
     char ipStr[INET_ADDRSTRLEN];
     InetNtopA(AF_INET, &addr.sin_addr, ipStr, sizeof(ipStr));
     char key[64];
     sprintf_s(key, sizeof(key), "%s:%d", ipStr, ntohs(addr.sin_port));
 
-    // »õ·Î¿î Å¬¶óÀÌ¾ğÆ®¸é ¹øÈ£ ÇÒ´ç ¹× ÃÊ±â Position ¼¼ÆÃ
+    // ìƒˆë¡œìš´ í´ë¼ì´ì–¸íŠ¸ë©´ ë²ˆí˜¸ í• ë‹¹ ë° ì´ˆê¸° Position ì„¸íŒ…
     if (clientIds.find(key) == clientIds.end()) {
         int newId = (int)clientIds.size() + 1;
         clientIds[key] = newId;
-        clientStates[newId] = PlayerState();  // ±âº» »ı¼ºÀÚ·Î ÃÊ±â »óÅÂ ¼³Á¤ (x,y,health,score)  // ±âº» »ı¼ºÀÚ¸¦ ÅëÇØ (0,0) ÃÊ±âÈ­
-        std::cout << "Å¬¶óÀÌ¾ğÆ® " << newId << "¹ø ÀÔÀå" << std::endl;
+        clientStates[newId] = PlayerState();  // ê¸°ë³¸ ìƒì„±ìë¡œ ì´ˆê¸° ìƒíƒœ ì„¤ì • (x,y,health,score)  // ê¸°ë³¸ ìƒì„±ìë¥¼ í†µí•´ (0,0) ì´ˆê¸°í™”
+        std::cout << "í´ë¼ì´ì–¸íŠ¸ " << newId << "ë²ˆ ì…ì¥" << std::endl;
     }
     return clientIds[key];
 }
 
-//º¤ÅÍ ¼øÈ¸ ÀÌ°Å ÃÖÀûÈ­ ±¦ÂúÀ»±î?
+//ë²¡í„° ìˆœíšŒ ì´ê±° ìµœì í™” ê´œì°®ì„ê¹Œ?
 bool CServer::isNewClient(const sockaddr_in& addr) {
     for (auto& c : clients) if (memcmp(&c, &addr, sizeof(addr)) == 0) return false;
     return true;
@@ -48,21 +49,21 @@ bool CServer::isNewClient(const sockaddr_in& addr) {
 
 void CServer::broadcastStates() {
     std::ostringstream oss;
-    //¸ğµç Å¬¶ó¸¦ ¼øÈ¸ÇÏ¸é¼­
+    //ëª¨ë“  í´ë¼ë¥¼ ìˆœíšŒí•˜ë©´ì„œ
     for (auto& kv : clientStates) {
         const auto& st = kv.second;
-        // PlayerStateÀÇ ¸ğµç ÇÊµå(À§Ä¡, Ã¼·Â, Á¡¼ö µî) Á÷·ÄÈ­
-        //oss·Î ¹®ÀÚ¿­ ½ºÆ®¸²À» ¸¸µé°í ÅØ½ºÆ® ÇüÅÂ·Î ÇÏ³ª¾¿ ºÙ¿©Áà¼­ oss.str()·Î ¿Ï¼ºµÈ ¹®ÀÚ¿­ ²¨³»±â
+        // PlayerStateì˜ ëª¨ë“  í•„ë“œ(ìœ„ì¹˜, ì²´ë ¥, ì ìˆ˜ ë“±) ì§ë ¬í™”
+        //ossë¡œ ë¬¸ìì—´ ìŠ¤íŠ¸ë¦¼ì„ ë§Œë“¤ê³  í…ìŠ¤íŠ¸ í˜•íƒœë¡œ í•˜ë‚˜ì”© ë¶™ì—¬ì¤˜ì„œ oss.str()ë¡œ ì™„ì„±ëœ ë¬¸ìì—´ êº¼ë‚´ê¸°
         oss << kv.first
             << ":(" << st.x << "," << st.y << ")"
             << ",HP=" << st.health
             << ",Score=" << st.score
             << ";";
     }
-    // Á÷·ÄÈ­µÈ ¹®ÀÚ¿­ »ı¼º
+    // ì§ë ¬í™”ëœ ë¬¸ìì—´ ìƒì„±
     std::string data = oss.str();
 
-    // ¸ğµç Å¬¶óÀÌ¾ğÆ®¿¡ ºê·ÎµåÄ³½ºÆ®
+    // ëª¨ë“  í´ë¼ì´ì–¸íŠ¸ì— ë¸Œë¡œë“œìºìŠ¤íŠ¸
     for (auto& clientAddr : clients) {
         sendto(serverSocket, data.c_str(), (int)data.size() + 1, 0,
             (sockaddr*)&clientAddr, sizeof(clientAddr));
@@ -79,6 +80,17 @@ void CServer::start() {
     int messageCount = 0;
 
     while (true) {
+        // ğŸ”„ í‚¤ ì…ë ¥ ì²´í¬: I í‚¤ë¡œ ì…ë ¥í í† ê¸€
+        if (_kbhit()) {
+            int ch = _getch();
+            if (ch == 'I' || ch == 'i') {
+                useInputQueue = !useInputQueue;
+                SetColor(11);
+                std::cout << "[ì„œë²„] ì…ë ¥í ì‚¬ìš©: " << (useInputQueue ? "ON (ì…ë ¥í)" : "OFF") << std::endl;
+                SetColor(7);
+            }
+        }
+
         auto start = clock::now();
         char buf[BUFFER_SIZE];
         sockaddr_in cl;
@@ -110,29 +122,35 @@ void CServer::start() {
                     std::chrono::system_clock::now().time_since_epoch()).count();
                 long long delay = now - cmd.timestamp;
                 SetColor(13);
-                std::cout << "[Debug] Client " << id << " Input delay: " << delay << " ms" << std::endl;
+                std::cout << "[Debug] Client " << id << " Input delay: " << delay << " ms" << (useInputQueue ? " (ì…ë ¥í)" : "") << std::endl;
                 SetColor(7);
             }
 
-            inputQueues[id].push(cmd);
+            if (useInputQueue) {
+                inputQueues[id].push(cmd); // ğŸ“¨ ì…ë ¥íì— ì €ì¥
+            }
+            else {
+                processCommand(cmd, id);   // âš¡ ì¦‰ì‹œ ì²˜ë¦¬
+            }
 
-            // RTT ¿¡ÄÚ ÀÀ´ä
             sendto(serverSocket, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
                 reinterpret_cast<sockaddr*>(&cl), len);
         }
 
-        for (auto& pair : inputQueues) {
-            int clientId = pair.first;
-            auto& queue = pair.second;
-            while (!queue.empty()) {
-                processCommand(queue.front(), clientId);
-                queue.pop();
+        if (useInputQueue) {
+            for (auto& pair : inputQueues) {
+                int clientId = pair.first;
+                auto& queue = pair.second;
+                while (!queue.empty()) {
+                    processCommand(queue.front(), clientId);
+                    queue.pop();
+                }
             }
         }
 
         if (debugMessagesPerFrame) {
             SetColor(14);
-            std::cout << "[Debug] Messages this frame: " << messageCount << std::endl;
+            std::cout << "[Debug] Messages this frame: " << messageCount << (useInputQueue ? " (ì…ë ¥í)" : "") << std::endl;
             SetColor(7);
         }
         if (debugPacketLoss) {
@@ -143,7 +161,7 @@ void CServer::start() {
                 double lossRate = expected > 0 ? (lost * 100.0 / expected) : 0.0;
                 SetColor(12);
                 std::cout << "[Debug] Client " << id << " Packet loss: "
-                    << lost << "/" << expected << " (" << lossRate << "%)" << std::endl;
+                    << lost << "/" << expected << " (" << lossRate << "% )" << (useInputQueue ? " (ì…ë ¥í)" : "") << std::endl;
                 SetColor(7);
             }
         }

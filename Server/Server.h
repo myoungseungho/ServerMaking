@@ -1,4 +1,4 @@
-// Server.h
+ï»¿// Server.h
 #pragma once
 #ifndef SERVER_H
 #define SERVER_H
@@ -18,12 +18,12 @@
 #define LOGIC_HZ 60
 #define BROADCAST_HZ 20
 
-// °¢ Å¬¶óÀÌ¾ğÆ®ÀÇ »óÅÂ¸¦ ÀúÀåÇÒ ±¸Á¶Ã¼ (È®Àå °¡´É)
+// ê° í´ë¼ì´ì–¸íŠ¸ì˜ ìƒíƒœë¥¼ ì €ì¥í•  êµ¬ì¡°ì²´ (í™•ì¥ ê°€ëŠ¥)
 struct PlayerState {
-    float x = 0.0f;        // À§Ä¡ X
-    float y = 0.0f;        // À§Ä¡ Y
-    int health = 100;      // Ã¼·Â
-    int score = 0;         // Á¡¼ö
+    float x = 0.0f;        // ìœ„ì¹˜ X
+    float y = 0.0f;        // ìœ„ì¹˜ Y
+    int health = 100;      // ì²´ë ¥
+    int score = 0;         // ì ìˆ˜
 };
 
 enum Command { CMD_UP, CMD_DOWN, CMD_LEFT, CMD_RIGHT };
@@ -39,10 +39,11 @@ class CServer {
 private:
 
     // === Debug Options ===
-   // Åä±Û °¡´É µğ¹ö±ë ¿ä¼Ò
-    bool debugMessagesPerFrame = true;  // ÇÑ ÇÁ·¹ÀÓ´ç ¸Ş½ÃÁö ¼ö ÃøÁ¤
-    bool debugPacketLoss = true;  // ÆĞÅ¶ ¼Õ½Ç·ü ÃøÁ¤
-    bool debugInputQueue = true;  // ÀÔ·Â Å¥ ±íÀÌ ¹× ´ë±â ½Ã°£ ÃøÁ¤
+   // í† ê¸€ ê°€ëŠ¥ ë””ë²„ê¹… ìš”ì†Œ
+    bool debugMessagesPerFrame = true;  // í•œ í”„ë ˆì„ë‹¹ ë©”ì‹œì§€ ìˆ˜ ì¸¡ì •
+    bool debugPacketLoss = true;  // íŒ¨í‚· ì†ì‹¤ë¥  ì¸¡ì •
+    bool debugInputQueue = true;  // ì…ë ¥ í ê¹Šì´ ë° ëŒ€ê¸° ì‹œê°„ ì¸¡ì •
+    bool useInputQueue = false; //  ì…ë ¥í ì‚¬ìš© ì—¬ë¶€ í† ê¸€
 
     SOCKET serverSocket;
     sockaddr_in serverAddr;
@@ -53,8 +54,8 @@ private:
     std::unordered_map<int, int> lostPacketMap;
     std::unordered_map<int, std::queue<ClientCommand>> inputQueues;
 
-    //Çì´õ¿¡ Å¬·¡½º ³»ºÎ Á¤ÀÇ ÇüÅÂ·Î µÎ¸é ÄÄÆÄÀÏ·¯°¡ ÀÎ¶óÀÎÀ¸·Î ÃÖÀûÈ­ÇÏ±â ´õ ½¬¿ò
-    //¸ÅÆ½ ¼ö¹é ¼öÃµ¹ø È£ÃâµÇ´Â ·ÎÁ÷Àº È£Ãâ ¿À¹öÇìµå¸¦ ÁÙÀÌ´Â°Ô ÁÁ´Ù.
+    //í—¤ë”ì— í´ë˜ìŠ¤ ë‚´ë¶€ ì •ì˜ í˜•íƒœë¡œ ë‘ë©´ ì»´íŒŒì¼ëŸ¬ê°€ ì¸ë¼ì¸ìœ¼ë¡œ ìµœì í™”í•˜ê¸° ë” ì‰¬ì›€
+    //ë§¤í‹± ìˆ˜ë°± ìˆ˜ì²œë²ˆ í˜¸ì¶œë˜ëŠ” ë¡œì§ì€ í˜¸ì¶œ ì˜¤ë²„í—¤ë“œë¥¼ ì¤„ì´ëŠ”ê²Œ ì¢‹ë‹¤.
     void processCommand(const ClientCommand& msg, int id) {
         auto& st = clientStates[id];
         switch (msg.cmd) {
@@ -74,7 +75,7 @@ public:
     void broadcastStates();
 };
 
-// ÄÜ¼Ö »ö»ó À¯Æ¿ ÇÔ¼ö
+// ì½˜ì†” ìƒ‰ìƒ ìœ í‹¸ í•¨ìˆ˜
 inline void SetColor(WORD color) {
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     SetConsoleTextAttribute(hConsole, color);
