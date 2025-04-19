@@ -48,9 +48,11 @@ bool CServer::isNewClient(const sockaddr_in& addr) {
 
 void CServer::broadcastStates() {
     std::ostringstream oss;
+    //모든 클라를 순회하면서
     for (auto& kv : clientStates) {
         const auto& st = kv.second;
         // PlayerState의 모든 필드(위치, 체력, 점수 등) 직렬화
+        //oss로 문자열 스트림을 만들고 텍스트 형태로 하나씩 붙여줘서 oss.str()로 완성된 문자열 꺼내기
         oss << kv.first
             << ":(" << st.x << "," << st.y << ")"
             << ",HP=" << st.health

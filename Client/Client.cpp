@@ -22,17 +22,23 @@ void CClient::start() {
     // 브로드캐스트 수신 스레드
     std::thread recvThread([this]() {
         char buffer[BUFFER_SIZE];
+        //서버의 정보 ip 포트
         sockaddr_in fromAddr;
         int fromLen = sizeof(fromAddr);
+        //수신 스레드는 계속 true 돌리기
         while (true) {
             int bytes = recvfrom(clientSocket, buffer, BUFFER_SIZE, 0,
                 (sockaddr*)&fromAddr, &fromLen);
             if (bytes > 0) {
                 std::cout << "[서버 브로드캐스트] " << buffer << std::endl;
             }
+            //너무 계속 확인하는것보다 브로드 캐스트 주기가 어차피 20hz니까 좀 쉬어도 됨
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
         });
+
+    //수신스레드를 메인루프와 분리해 독립실행 detach 호출 후에 스레드 종료를 join 안해도 
+    //메인 스레드 종료돼도 별도로 실행중일 수 있음
     recvThread.detach();
 
     while (true) {

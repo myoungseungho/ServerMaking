@@ -42,6 +42,8 @@ private:
     std::unordered_map<std::string, int> clientIds;
     std::unordered_map<int, PlayerState> clientStates;
 
+    //헤더에 클래스 내부 정의 형태로 두면 컴파일러가 인라인으로 최적화하기 더 쉬움
+    //매틱 수백 수천번 호출되는 로직은 호출 오버헤드를 줄이는게 좋다.
     void processCommand(const ClientCommand& msg, int id) {
         auto& pos = clientStates[id];
         switch (msg.cmd) {
