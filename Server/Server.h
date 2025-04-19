@@ -17,6 +17,14 @@
 #define LOGIC_HZ 60
 #define BROADCAST_HZ 20
 
+// 각 클라이언트의 상태를 저장할 구조체 (확장 가능)
+struct PlayerState {
+    float x = 0.0f;        // 위치 X
+    float y = 0.0f;        // 위치 Y
+    int health = 100;      // 체력
+    int score = 0;         // 점수
+};
+
 enum Command { CMD_UP, CMD_DOWN, CMD_LEFT, CMD_RIGHT };
 
 struct ClientCommand {
@@ -32,15 +40,15 @@ private:
     sockaddr_in serverAddr;
     std::vector<sockaddr_in> clients;
     std::unordered_map<std::string, int> clientIds;
-    std::unordered_map<int, std::pair<float, float>> clientStates;
+    std::unordered_map<int, PlayerState> clientStates;
 
     void processCommand(const ClientCommand& msg, int id) {
-        // 이동 연산
+        auto& pos = clientStates[id];
         switch (msg.cmd) {
-        case CMD_UP:    clientStates[id].second += 1.0f; break;
-        case CMD_DOWN:  clientStates[id].second -= 1.0f; break;
-        case CMD_LEFT:  clientStates[id].first -= 1.0f;  break;
-        case CMD_RIGHT: clientStates[id].first += 1.0f;  break;
+        case CMD_UP:    pos.y += 1.0f; break;
+        case CMD_DOWN:  pos.y -= 1.0f; break;
+        case CMD_LEFT:  pos.x -= 1.0f; break;
+        case CMD_RIGHT: pos.x += 1.0f; break;
         }
     }
 
