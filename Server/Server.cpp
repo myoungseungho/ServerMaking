@@ -109,18 +109,29 @@ void CServer::start() {
                 long long now = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::system_clock::now().time_since_epoch()).count();
                 long long delay = now - cmd.timestamp;
-                SetColor(13); // ºÐÈ«»ö
+                SetColor(13);
                 std::cout << "[Debug] Client " << id << " Input delay: " << delay << " ms" << std::endl;
                 SetColor(7);
             }
 
-            processCommand(cmd, id);
+            inputQueues[id].push(cmd);
+
+            // RTT ¿¡ÄÚ ÀÀ´ä
             sendto(serverSocket, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
                 reinterpret_cast<sockaddr*>(&cl), len);
         }
 
+        for (auto& pair : inputQueues) {
+            int clientId = pair.first;
+            auto& queue = pair.second;
+            while (!queue.empty()) {
+                processCommand(queue.front(), clientId);
+                queue.pop();
+            }
+        }
+
         if (debugMessagesPerFrame) {
-            SetColor(14); // ³ë¶õ»ö
+            SetColor(14);
             std::cout << "[Debug] Messages this frame: " << messageCount << std::endl;
             SetColor(7);
         }
@@ -130,7 +141,7 @@ void CServer::start() {
                 int expected = pair.second;
                 int lost = lostPacketMap[id];
                 double lossRate = expected > 0 ? (lost * 100.0 / expected) : 0.0;
-                SetColor(12); // ¹àÀº »¡°£»ö
+                SetColor(12);
                 std::cout << "[Debug] Client " << id << " Packet loss: "
                     << lost << "/" << expected << " (" << lossRate << "%)" << std::endl;
                 SetColor(7);

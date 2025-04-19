@@ -10,6 +10,7 @@
 #include <string>
 #include <unordered_map>
 #include <chrono>
+#include <queue>
 #pragma comment(lib, "ws2_32.lib")
 
 #define SERVER_PORT 8888
@@ -40,7 +41,7 @@ private:
     // === Debug Options ===
    // 토글 가능 디버깅 요소
     bool debugMessagesPerFrame = true;  // 한 프레임당 메시지 수 측정
-    bool debugPacketLoss = false;  // 패킷 손실률 측정
+    bool debugPacketLoss = true;  // 패킷 손실률 측정
     bool debugInputQueue = true;  // 입력 큐 깊이 및 대기 시간 측정
 
     SOCKET serverSocket;
@@ -50,6 +51,7 @@ private:
     std::unordered_map<int, PlayerState> clientStates;
     std::unordered_map<int, int> expectedSeqMap;
     std::unordered_map<int, int> lostPacketMap;
+    std::unordered_map<int, std::queue<ClientCommand>> inputQueues;
 
     //헤더에 클래스 내부 정의 형태로 두면 컴파일러가 인라인으로 최적화하기 더 쉬움
     //매틱 수백 수천번 호출되는 로직은 호출 오버헤드를 줄이는게 좋다.
