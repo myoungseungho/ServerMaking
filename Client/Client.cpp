@@ -33,10 +33,15 @@ void CClient::start() {
                     memcpy(&echo, buffer, sizeof(echo));
                     auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::system_clock::now().time_since_epoch()).count();
+                    SetColor(10); // 연두색
                     std::cout << "[Debug RTT] " << (now - echo.timestamp) << " ms" << std::endl;
+                    SetColor(7);
                 }
                 else {
-                    std::cout << "[서버 브로드캐스트] " << buffer << std::endl;
+                    std::cout << "[서버 브로드캐스트] ";
+                    SetColor(11); // 밝은 하늘색
+                    std::cout << buffer << std::endl;
+                    SetColor(7);  // 기본색으로 복귀
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(5));

@@ -52,4 +52,10 @@ public:
     void start();
 };
 
+// 콘솔 색상 유틸 함수
+inline void SetColor(WORD color) {
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleTextAttribute(hConsole, color);
+}
+
 #endif

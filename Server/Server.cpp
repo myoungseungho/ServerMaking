@@ -109,7 +109,9 @@ void CServer::start() {
                 long long now = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::system_clock::now().time_since_epoch()).count();
                 long long delay = now - cmd.timestamp;
+                SetColor(13); // ºÐÈ«»ö
                 std::cout << "[Debug] Client " << id << " Input delay: " << delay << " ms" << std::endl;
+                SetColor(7);
             }
 
             processCommand(cmd, id);
@@ -118,7 +120,9 @@ void CServer::start() {
         }
 
         if (debugMessagesPerFrame) {
+            SetColor(14); // ³ë¶õ»ö
             std::cout << "[Debug] Messages this frame: " << messageCount << std::endl;
+            SetColor(7);
         }
         if (debugPacketLoss) {
             for (const auto& pair : expectedSeqMap) {
@@ -126,8 +130,10 @@ void CServer::start() {
                 int expected = pair.second;
                 int lost = lostPacketMap[id];
                 double lossRate = expected > 0 ? (lost * 100.0 / expected) : 0.0;
+                SetColor(12); // ¹àÀº »¡°£»ö
                 std::cout << "[Debug] Client " << id << " Packet loss: "
                     << lost << "/" << expected << " (" << lossRate << "%)" << std::endl;
+                SetColor(7);
             }
         }
 
