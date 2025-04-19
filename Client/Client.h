@@ -14,7 +14,7 @@
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8888
-#define BUFFER_SIZE 512
+#define BUFFER_SIZE 1500
 
 enum Command { CMD_UP, CMD_DOWN, CMD_LEFT, CMD_RIGHT };
 
@@ -23,6 +23,7 @@ struct ClientCommand {
     int sequenceId;     // 시퀀스 추적
     Command cmd;        // 이동 명령
     long long timestamp;// 타임스탬프
+    char filler[1024]; //  의미 없는 데이터로 무게 키우기
 };
 
 class CClient {
@@ -32,8 +33,8 @@ private:
     int sequenceId = 0;
     bool autoMode = false;
     Command autoCmd = CMD_UP;
-    int sendIntervalMs = 50; // 자동 모드 전송 주기
-    bool debugRTT = true;
+    int sendIntervalMs = 1; // 자동 모드 전송 주기
+    bool debugRTT = false;
 
     void sendCommand(Command cmd) {
         ClientCommand msg;
