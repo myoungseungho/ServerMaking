@@ -36,21 +36,30 @@ struct ClientCommand {
 
 class CServer {
 private:
+
+    // === Debug Options ===
+   // 토글 가능 디버깅 요소
+    bool debugMessagesPerFrame = false;  // 한 프레임당 메시지 수 측정
+    bool debugPacketLoss = true;  // 패킷 손실률 측정
+    bool debugInputQueue = false;  // 입력 큐 깊이 및 대기 시간 측정
+
     SOCKET serverSocket;
     sockaddr_in serverAddr;
     std::vector<sockaddr_in> clients;
     std::unordered_map<std::string, int> clientIds;
     std::unordered_map<int, PlayerState> clientStates;
+    std::unordered_map<int, int> expectedSeqMap;
+    std::unordered_map<int, int> lostPacketMap;
 
     //헤더에 클래스 내부 정의 형태로 두면 컴파일러가 인라인으로 최적화하기 더 쉬움
     //매틱 수백 수천번 호출되는 로직은 호출 오버헤드를 줄이는게 좋다.
     void processCommand(const ClientCommand& msg, int id) {
-        auto& pos = clientStates[id];
+        auto& st = clientStates[id];
         switch (msg.cmd) {
-        case CMD_UP:    pos.y += 1.0f; break;
-        case CMD_DOWN:  pos.y -= 1.0f; break;
-        case CMD_LEFT:  pos.x -= 1.0f; break;
-        case CMD_RIGHT: pos.x += 1.0f; break;
+        case CMD_UP:    st.y += 1; break;
+        case CMD_DOWN:  st.y -= 1; break;
+        case CMD_LEFT:  st.x -= 1; break;
+        case CMD_RIGHT: st.x += 1; break;
         }
     }
 

@@ -33,6 +33,7 @@ private:
     bool autoMode = false;
     Command autoCmd = CMD_UP;
     int sendIntervalMs = 50; // 자동 모드 전송 주기
+    bool debugRTT = true;
 
     void sendCommand(Command cmd) {
         ClientCommand msg;

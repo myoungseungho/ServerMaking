@@ -71,54 +71,62 @@ void CServer::broadcastStates() {
 
 
 void CServer::start() {
-
-    //구조체 clock
     using clock = std::chrono::high_resolution_clock;
-    //millisecons 임시객체를 만들어 frameDuration 셋팅
-    //입력은 빠르게 처리해야한다
-    const auto frameDuration = std::chrono::milliseconds(1000 / LOGIC_HZ);
-    //브로드캐스트는 패킷 폭주한다. 20Hz 정도로 낮춰 보내자.
-    const auto broadcastInterval = std::chrono::milliseconds(1000 / BROADCAST_HZ);
+    auto frameDur = std::chrono::milliseconds(1000 / LOGIC_HZ);
+    auto bcInt = std::chrono::milliseconds(1000 / BROADCAST_HZ);
+    auto nextBC = clock::now();
 
-    auto broadcastTimer = clock::now();
+    int messageCount = 0;
 
-    //서버가 멈추지 않고 계속 동작
     while (true) {
-        //현재 프레임 스타트
-        auto frameStart = clock::now();
-        //버퍼 사이즈 512
-        char buffer[BUFFER_SIZE];
+        auto start = clock::now();
+        char buf[BUFFER_SIZE];
+        sockaddr_in cl;
+        int len = sizeof(cl);
 
-        //recvfrom 함수 호출 시 서버는 클라가 누구인지 알아야 한다.
-        //udp는 연결이 없어서 누가 보냈는지 정보를 직접 받아와야 한다.
-        //클라이언트의 ip주소와 포트 번호를 담을 공간이 필요하다.
-        //이 ip 포트를 저장하는 구조체가 sockaddr_in이다.
-        sockaddr_in clientAddr;
-        int addrLen = sizeof(clientAddr);
+        if (debugMessagesPerFrame) messageCount = 0;
 
-        // 로직 틱 (60Hz)
-        //while이돌면서 현재와 시작점이 duration이 작다면 계속해서 호출한다.
-        //한 프레임에 여러 입력이 들어오는건 다 처리해야 한다.
-        while (clock::now() - frameStart < frameDuration) {
-            int bytes = recvfrom(serverSocket, buffer, BUFFER_SIZE, 0,
-                (sockaddr*)&clientAddr, &addrLen);
-            //아무것도 안들어왔다면
-            if (bytes <= 0) continue;
+        while (clock::now() - start < frameDur) {
+            int b = recvfrom(serverSocket, buf, BUFFER_SIZE, 0,
+                reinterpret_cast<sockaddr*>(&cl), &len);
+            if (b <= 0) continue;
 
-            //새로운 클라이언트라면 추가
-            if (isNewClient(clientAddr)) clients.push_back(clientAddr);
+            if (debugMessagesPerFrame) ++messageCount;
 
+            if (isNewClient(cl)) clients.push_back(cl);
             ClientCommand cmd;
-            memcpy(&cmd, buffer, sizeof(cmd));
-            int id = getClientNumber(clientAddr);
+            memcpy(&cmd, buf, sizeof(cmd));
+            int id = getClientNumber(cl);
+
+            if (debugPacketLoss) {
+                int& expected = expectedSeqMap[id];
+                if (cmd.sequenceId != expected)
+                    lostPacketMap[id] += (cmd.sequenceId - expected);
+                expected = cmd.sequenceId + 1;
+            }
+
             processCommand(cmd, id);
+            sendto(serverSocket, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
+                reinterpret_cast<sockaddr*>(&cl), len);
         }
 
-        // 브로드캐스트 틱 (20Hz)
-        auto now = clock::now();
-        if (now - broadcastTimer >= broadcastInterval) {
+        if (debugMessagesPerFrame) {
+            std::cout << "[Debug] Messages this frame: " << messageCount << std::endl;
+        }
+        if (debugPacketLoss) {
+            for (const auto& pair : expectedSeqMap) {
+                int id = pair.first;
+                int expected = pair.second;
+                int lost = lostPacketMap[id];
+                double lossRate = expected > 0 ? (lost * 100.0 / expected) : 0.0;
+                std::cout << "[Debug] Client " << id << " Packet loss: "
+                    << lost << "/" << expected << " (" << lossRate << "%)" << std::endl;
+            }
+        }
+
+        if (clock::now() >= nextBC) {
             broadcastStates();
-            broadcastTimer = now;
+            nextBC = clock::now() + bcInt;
         }
     }
 }
