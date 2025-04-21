@@ -72,6 +72,19 @@ void CServer::broadcastStates() {
     }
 }
 
+
+void CServer::sendAck(const sockaddr_in& cl, int clientId, int seq) {
+    AckPacket ack{ clientId, seq };
+    sendto(serverSocket, reinterpret_cast<char*>(&ack), sizeof(ack), 0,
+        (sockaddr*)&cl, sizeof(cl));
+}
+
+void CServer::sendNack(const sockaddr_in& cl, int clientId, int missingSeq) {
+    NackPacket nack{ clientId, missingSeq };
+    sendto(serverSocket, reinterpret_cast<char*>(&nack), sizeof(nack), 0,
+        (sockaddr*)&cl, sizeof(cl));
+}
+
 void CServer::consumeInputQueue() {
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -87,7 +100,6 @@ void CServer::consumeInputQueue() {
         }
     }
 }
-
 
 
 void CServer::start() {
@@ -125,9 +137,6 @@ void CServer::start() {
                 reinterpret_cast<sockaddr*>(&cl), &len);
             if (b <= 0) continue;
 
-            // 🧪 패킷 손실 시뮬레이션
-            if (simulatePacketLoss && (rand() % 100) < 30) continue;
-
             if (debugMessagesPerFrame) ++messageCount;
 
             if (isNewClient(cl)) clients.push_back(cl);
@@ -135,12 +144,14 @@ void CServer::start() {
             memcpy(&cmd, buf, sizeof(cmd));
             int id = getClientNumber(cl);
 
-            if (debugPacketLoss) {
-                int& expected = expectedSeqMap[id];
-                if (cmd.sequenceId != expected)
-                    lostPacketMap[id] += (cmd.sequenceId - expected);
-                expected = cmd.sequenceId + 1;
+            sendAck(cl, id, cmd.sequenceId);
+            if (cmd.sequenceId != expectedSeqMap[id]) {
+                for (int missed = expectedSeqMap[id]; missed < cmd.sequenceId; ++missed) {
+                    sendNack(cl, id, missed);
+                    lostPacketMap[id] += 1;
+                }
             }
+            expectedSeqMap[id] = cmd.sequenceId + 1;
 
             if (debugInputQueue) {
                 long long now = std::chrono::duration_cast<std::chrono::milliseconds>(

@@ -40,6 +40,16 @@ struct ClientCommand {
     long long timestamp;
 };
 
+struct AckPacket {
+    int clientId;
+    int ackSequenceId;
+};
+
+struct NackPacket {
+    int clientId;
+    int missingSequenceId;
+};
+
 class CServer {
 private:
 
@@ -81,6 +91,8 @@ private:
     }
 
     void consumeInputQueue();
+    void sendAck(const sockaddr_in& cl, int clientId, int seq);
+    void sendNack(const sockaddr_in& cl, int clientId, int missingSeq);
 
 public:
     CServer();
