@@ -46,7 +46,7 @@ bool CServer::isNewClient(const sockaddr_in& addr) {
 
 
 void CServer::sendAck(const sockaddr_in& cl, int clientId, int seq) {
-    // ACK/NACK 기능이 꺼져 있으면 스킵
+    // ACK/NACK 기능이 꺼져 있으면 바로 리턴
     if (!enableAckNack) {
         if (debugPacketLoss) {
             SetColor(12);
@@ -56,7 +56,7 @@ void CServer::sendAck(const sockaddr_in& cl, int clientId, int seq) {
         return;
     }
 
-    // 손실 시뮬레이션: 먼저 드롭 여부 결정
+    // 👈 여기로 이동: 전송 로그보다 먼저 '손실 시뮬레이션 드롭'을 판단
     if (simulatePacketLoss && (rand() % 100) < PACKET_LOSS_PERCENT) {
         if (debugPacketLoss) {
             SetColor(12);
@@ -67,7 +67,7 @@ void CServer::sendAck(const sockaddr_in& cl, int clientId, int seq) {
         return;
     }
 
-    // 실제 전송 직전 로그
+    // 이제 실제로 '보내려 한다'는 로그를 찍습니다
     if (debugPacketLoss) {
         SetColor(10);
         std::cout << "[Debug] Sending ACK client=" << clientId
@@ -75,13 +75,13 @@ void CServer::sendAck(const sockaddr_in& cl, int clientId, int seq) {
         SetColor(7);
     }
 
-    // ACK 패킷 전송
+    // 실제 ACK 전송
     AckPacket ack{ clientId, seq };
     sendto(serverSocket,
         reinterpret_cast<char*>(&ack), sizeof(ack),
         0, reinterpret_cast<const sockaddr*>(&cl), sizeof(cl));
 
-    // ACK 전송 성공 시 손실 복구
+    // 성공적으로 ACK이 전송되었을 때만 손실 카운트를 줄입니다
     if (lostPacketMap[clientId] > 0) {
         --lostPacketMap[clientId];
         if (debugPacketLoss) {
@@ -253,6 +253,8 @@ void CServer::consumeInputQueue() {
 }
 
 void CServer::processCommand(const ClientCommand& msg, int id) {
+    std::cout << "[Apply] Executing seq=" << msg.sequenceId << " for client=" << id << std::endl;
+
     auto& st = clientStates[id];
     switch (msg.cmd) {
     case CMD_UP:    st.y += 1; break;
