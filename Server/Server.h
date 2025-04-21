@@ -23,7 +23,7 @@
 #define BUFFER_SIZE          1500
 #define LOGIC_HZ             60
 #define BROADCAST_HZ         20
-#define PACKET_LOSS_PERCENT  50     // 손실 시뮬레이션 비율 (%)
+#define PACKET_LOSS_PERCENT  10     // 손실 시뮬레이션 비율 (%)
 
 // 각 클라이언트 상태
 struct PlayerState {
@@ -35,7 +35,7 @@ struct PlayerState {
 
 enum Command { CMD_UP, CMD_DOWN, CMD_LEFT, CMD_RIGHT };
 
-// 수신된 클라이언트 명령
+// 수신된 클라이언트 명령 구조
 struct ClientCommand {
     int clientId;
     int sequenceId;
@@ -44,14 +44,8 @@ struct ClientCommand {
 };
 
 // ACK/NACK 패킷 구조
-struct AckPacket {
-    int clientId;
-    int ackSequenceId;
-};
-struct NackPacket {
-    int clientId;
-    int missingSequenceId;
-};
+struct AckPacket { int clientId; int ackSequenceId; };
+struct NackPacket { int clientId; int missingSequenceId; };
 
 class CServer {
 private:
@@ -65,10 +59,10 @@ private:
     std::unordered_map<int, std::queue<ClientCommand>> inputQueues;
     std::mutex queueMutex;
 
-    // 디버그/시뮬레이션 옵션
+    // 옵션 및 디버깅 플래그
     bool simulatePacketLoss = true;   // rand()로 일부 패킷 드롭
     bool debugPacketLoss = true;  // 드롭 로그 및 손실률 출력
-    bool enableAckNack = true; // ACK/NACK 기능 토글
+    bool enableAckNack = false; // ACK/NACK 기능 토글
     bool useInputQueue = false;
     bool useThreadedProc = false;
 
@@ -86,7 +80,7 @@ public:
     void broadcastStates();
 };
 
-// 콘솔 색상
+// 콘솔 색상 유틸
 inline void SetColor(WORD color) {
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     SetConsoleTextAttribute(hConsole, color);

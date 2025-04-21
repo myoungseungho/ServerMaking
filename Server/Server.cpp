@@ -43,7 +43,10 @@ bool CServer::isNewClient(const sockaddr_in& addr) {
     return true;
 }
 
+
+
 void CServer::sendAck(const sockaddr_in& cl, int clientId, int seq) {
+    // ACK/NACK 기능이 꺼져 있으면 스킵
     if (!enableAckNack) {
         if (debugPacketLoss) {
             SetColor(12);
@@ -52,24 +55,47 @@ void CServer::sendAck(const sockaddr_in& cl, int clientId, int seq) {
         }
         return;
     }
-    if (debugPacketLoss) {
-        SetColor(10);
-        std::cout << "[Debug] Sending ACK client=" << clientId << " seq=" << seq << std::endl;
-        SetColor(7);
-    }
+
+    // 손실 시뮬레이션: 먼저 드롭 여부 결정
     if (simulatePacketLoss && (rand() % 100) < PACKET_LOSS_PERCENT) {
         if (debugPacketLoss) {
             SetColor(12);
-            std::cout << "[Debug] Dropped ACK client=" << clientId << " seq=" << seq << std::endl;
+            std::cout << "[Debug] Dropped ACK client=" << clientId
+                << " seq=" << seq << std::endl;
             SetColor(7);
         }
         return;
     }
+
+    // 실제 전송 직전 로그
+    if (debugPacketLoss) {
+        SetColor(10);
+        std::cout << "[Debug] Sending ACK client=" << clientId
+            << " seq=" << seq << std::endl;
+        SetColor(7);
+    }
+
+    // ACK 패킷 전송
     AckPacket ack{ clientId, seq };
     sendto(serverSocket,
         reinterpret_cast<char*>(&ack), sizeof(ack),
         0, reinterpret_cast<const sockaddr*>(&cl), sizeof(cl));
+
+    // ACK 전송 성공 시 손실 복구
+    if (lostPacketMap[clientId] > 0) {
+        --lostPacketMap[clientId];
+        if (debugPacketLoss) {
+            SetColor(9);
+            std::cout << "[Debug] Recovered packet via ACK seq=" << seq
+                << " for client=" << clientId
+                << ", lost now " << lostPacketMap[clientId] << std::endl;
+            SetColor(7);
+        }
+    }
 }
+
+
+
 
 void CServer::sendNack(const sockaddr_in& cl, int clientId, int missingSeq) {
     if (!enableAckNack) {
@@ -161,43 +187,26 @@ void CServer::start() {
             ClientCommand cmd;
             memcpy(&cmd, buf, sizeof(cmd));
             int id = getClientNumber(cl);
-            // 재전송으로 회수된 누락 패킷 처리 (lostPacketMap 감소)
-            if (enableAckNack && cmd.sequenceId < expectedSeqMap[id]) {
-                if (lostPacketMap[id] > 0) {
-                    --lostPacketMap[id];
+
+            // 누락 감지 & 요청
+            if (cmd.sequenceId != expectedSeqMap[id]) {
+                for (int m = expectedSeqMap[id]; m < cmd.sequenceId; ++m) {
+                    ++lostPacketMap[id];
                     if (debugPacketLoss) {
-                        SetColor(9);
-                        std::cout << "[Debug] Recovered packet " << cmd.sequenceId
-                            << " for client " << id << ", lost count now " << lostPacketMap[id] << std::endl;
+                        SetColor(12);
+                        std::cout << "[Debug] Detected missing packet " << m
+                            << " for client " << id
+                            << ", lost count now " << lostPacketMap[id] << std::endl;
                         SetColor(7);
                     }
-                }
-            }
-            sendAck(cl, id, cmd.sequenceId);
-            // ACK/NACK 설정에 따라 누락 감지/요청 처리
-            if (!enableAckNack) {
-                // ACK/NACK 비활성: 누락 감지 시 lostPacketMap 증가
-                if (cmd.sequenceId != expectedSeqMap[id]) {
-                    for (int m = expectedSeqMap[id]; m < cmd.sequenceId; ++m) {
-                        lostPacketMap[id]++;
-                        if (debugPacketLoss) {
-                            SetColor(12);
-                            std::cout << "[Debug] Detected missing packet " << m
-                                << " for client " << id << ", lost count " << lostPacketMap[id] << std::endl;
-                            SetColor(7);
-                        }
-                    }
-                }
-            }
-            else {
-                // ACK/NACK 활성: 누락 시 재전송 요청
-                if (cmd.sequenceId != expectedSeqMap[id]) {
-                    for (int m = expectedSeqMap[id]; m < cmd.sequenceId; ++m) {
-                        sendNack(cl, id, m);
-                    }
+                    if (enableAckNack) sendNack(cl, id, m);
                 }
             }
             expectedSeqMap[id] = cmd.sequenceId + 1;
+
+            // ACK 전송 (내부에서 복구)
+            sendAck(cl, id, cmd.sequenceId);
+
             if (useInputQueue) {
                 std::lock_guard<std::mutex> lock(queueMutex);
                 inputQueues[id].push(cmd);
@@ -206,14 +215,15 @@ void CServer::start() {
                 processCommand(cmd, id);
             }
         }
+
         if (debugPacketLoss) {
             SetColor(14);
             for (auto& p : expectedSeqMap) {
-                int id = p.first;
+                int cid = p.first;
                 int exp = p.second;
-                int lost = lostPacketMap[id];
+                int lost = lostPacketMap[cid];
                 double rate = exp > 0 ? (lost * 100.0 / exp) : 0.0;
-                std::cout << "[Debug] Client " << id
+                std::cout << "[Debug] Client " << cid
                     << " Packet loss: " << lost << "/" << exp
                     << " (" << rate << "% )" << std::endl;
             }
@@ -225,6 +235,7 @@ void CServer::start() {
         }
     }
 }
+
 
 void CServer::consumeInputQueue() {
     while (true) {
