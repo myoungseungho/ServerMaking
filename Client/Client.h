@@ -33,7 +33,7 @@ private:
     int sequenceId = 0;
     bool autoMode = false;
     Command autoCmd = CMD_UP;
-    int sendIntervalMs = 1; // 자동 모드 전송 주기
+    int sendIntervalMs = 100; // 자동 모드 전송 주기
     bool debugRTT = false;
 
     void sendCommand(Command cmd) {

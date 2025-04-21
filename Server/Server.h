@@ -43,7 +43,7 @@ private:
     bool debugMessagesPerFrame = true;  // 한 프레임당 메시지 수 측정
     bool debugPacketLoss = true;  // 패킷 손실률 측정
     bool debugInputQueue = true;  // 입력 큐 깊이 및 대기 시간 측정
-    bool useInputQueue = false; //  입력큐 사용 여부 토글
+    bool useInputQueue = true; //  입력큐 사용 여부 토글
 
     SOCKET serverSocket;
     sockaddr_in serverAddr;
