@@ -14,25 +14,28 @@
 #include <thread>
 #include <mutex>
 #include <conio.h>
-#include <cstdlib> // 패킷 손실 시뮬레이션용
+#include <cstdlib>      // rand(), srand()
+#include <ctime>        // time()
 
 #pragma comment(lib, "ws2_32.lib")
 
-#define SERVER_PORT 8888
-#define BUFFER_SIZE 1500
-#define LOGIC_HZ 60
-#define BROADCAST_HZ 20
+#define SERVER_PORT          8888
+#define BUFFER_SIZE          1500
+#define LOGIC_HZ             60
+#define BROADCAST_HZ         20
+#define PACKET_LOSS_PERCENT  50     // 손실 시뮬레이션 비율 (%)
 
-// 각 클라이언트의 상태를 저장할 구조체 (확장 가능)
+// 각 클라이언트 상태
 struct PlayerState {
-    float x = 0.0f;        // 위치 X
-    float y = 0.0f;        // 위치 Y
-    int health = 100;      // 체력
-    int score = 0;         // 점수
+    float x = 0.0f;
+    float y = 0.0f;
+    int health = 100;
+    int score = 0;
 };
 
 enum Command { CMD_UP, CMD_DOWN, CMD_LEFT, CMD_RIGHT };
 
+// 수신된 클라이언트 명령
 struct ClientCommand {
     int clientId;
     int sequenceId;
@@ -40,11 +43,11 @@ struct ClientCommand {
     long long timestamp;
 };
 
+// ACK/NACK 패킷 구조
 struct AckPacket {
     int clientId;
     int ackSequenceId;
 };
-
 struct NackPacket {
     int clientId;
     int missingSequenceId;
@@ -52,16 +55,6 @@ struct NackPacket {
 
 class CServer {
 private:
-
-    // === Debug Options ===
-   // 토글 가능 디버깅 요소
-    bool debugMessagesPerFrame = false;  // 한 프레임당 메시지 수 측정
-    bool debugPacketLoss = true;  // 패킷 손실률 측정
-    bool debugInputQueue = false;  // 입력 큐 깊이 및 대기 시간 측정
-    bool useInputQueue = false; //  입력큐 사용 여부 토글
-    bool useThreadedProcessing = false; // ⛓️ 스레드 분기 여부
-    bool simulatePacketLoss = true;     // 🧪 패킷 손실 시뮬레이션 추가
-
     SOCKET serverSocket;
     sockaddr_in serverAddr;
     std::vector<sockaddr_in> clients;
@@ -72,24 +65,14 @@ private:
     std::unordered_map<int, std::queue<ClientCommand>> inputQueues;
     std::mutex queueMutex;
 
-    //헤더에 클래스 내부 정의 형태로 두면 컴파일러가 인라인으로 최적화하기 더 쉬움
-    //매틱 수백 수천번 호출되는 로직은 호출 오버헤드를 줄이는게 좋다.
-    void processCommand(const ClientCommand& msg, int id) {
-        auto& st = clientStates[id];
-        switch (msg.cmd) {
-        case CMD_UP:    st.y += 1; break;
-        case CMD_DOWN:  st.y -= 1; break;
-        case CMD_LEFT:  st.x -= 1; break;
-        case CMD_RIGHT: st.x += 1; break;
-        }
+    // 디버그/시뮬레이션 옵션
+    bool simulatePacketLoss = true;   // rand()로 일부 패킷 드롭
+    bool debugPacketLoss = true;  // 드롭 로그 및 손실률 출력
+    bool enableAckNack = true; // ACK/NACK 기능 토글
+    bool useInputQueue = false;
+    bool useThreadedProc = false;
 
-        // ⏱️ 부하 추가 (가벼운 연산 반복)
-      /*  volatile int dummy = 0;
-        for (int i = 0; i < 30000000; ++i) {
-            dummy += i % 3;
-        }*/
-    }
-
+    void processCommand(const ClientCommand& msg, int id);
     void consumeInputQueue();
     void sendAck(const sockaddr_in& cl, int clientId, int seq);
     void sendNack(const sockaddr_in& cl, int clientId, int missingSeq);
@@ -103,7 +86,7 @@ public:
     void broadcastStates();
 };
 
-// 콘솔 색상 유틸 함수
+// 콘솔 색상
 inline void SetColor(WORD color) {
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     SetConsoleTextAttribute(hConsole, color);

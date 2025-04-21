@@ -19,36 +19,64 @@ CClient::~CClient() {
 }
 
 void CClient::start() {
+    // 수신 처리 스레드
     std::thread recvThread([this]() {
         char buffer[BUFFER_SIZE];
         sockaddr_in fromAddr;
         int fromLen = sizeof(fromAddr);
+
         while (true) {
             int bytes = recvfrom(clientSocket, buffer, BUFFER_SIZE, 0,
                 reinterpret_cast<sockaddr*>(&fromAddr), &fromLen);
-            if (bytes > 0) {
-                // RTT 에코 응답 처리
-                if (debugRTT && bytes == sizeof(ClientCommand)) {
-                    ClientCommand echo;
-                    memcpy(&echo, buffer, sizeof(echo));
-                    auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::system_clock::now().time_since_epoch()).count();
-                    SetColor(10); // 연두색
-                    std::cout << "[Debug RTT] " << (now - echo.timestamp) << " ms" << std::endl;
-                    SetColor(7);
-                }
-                else {
-                    std::cout << "[서버 브로드캐스트] ";
-                    SetColor(11); // 밝은 하늘색
-                    std::cout << buffer << std::endl;
-                    SetColor(7);  // 기본색으로 복귀
-                }
+            if (bytes <= 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                continue;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+            // ACK 수신 처리
+            if (enableAckNack && bytes == sizeof(AckPacket)) {
+                AckPacket ack;
+                memcpy(&ack, buffer, sizeof(ack));
+                std::lock_guard<std::mutex> lock(ackMutex);
+                pendingCommands.erase(ack.ackSequenceId);
+                continue;
+            }
+            // NACK 수신 처리
+            if (enableAckNack && bytes == sizeof(NackPacket)) {
+                NackPacket nack;
+                memcpy(&nack, buffer, sizeof(nack));
+                std::lock_guard<std::mutex> lock(ackMutex);
+                auto it = pendingCommands.find(nack.missingSequenceId);
+                if (it != pendingCommands.end()) {
+                    // 재전송
+                    auto& msg = it->second;
+                    sendto(clientSocket, reinterpret_cast<char*>(&msg), sizeof(msg), 0,
+                        reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
+                }
+                continue;
+            }
+
+            // RTT 디버그 혹은 브로드캐스트 메시지 처리
+            if (debugRTT && bytes == sizeof(ClientCommand)) {
+                ClientCommand echo;
+                memcpy(&echo, buffer, sizeof(echo));
+                auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
+                SetColor(10);
+                std::cout << "[Debug RTT] " << (now - echo.timestamp) << " ms" << std::endl;
+                SetColor(7);
+            }
+            else {
+                std::cout << "[서버 브로드캐스트] ";
+                SetColor(11);
+                std::cout << buffer << std::endl;
+                SetColor(7);
+            }
         }
         });
     recvThread.detach();
 
+    // 메인 루프: 키 입력 또는 자동 모드
     while (true) {
         if (_kbhit()) {
             int ch = _getch();
@@ -57,6 +85,7 @@ void CClient::start() {
                 std::cout << (autoMode ? "[Auto ON]" : "[Interactive ON]") << std::endl;
             }
         }
+
         if (autoMode) {
             sendCommand(autoCmd);
             std::this_thread::sleep_for(std::chrono::milliseconds(sendIntervalMs));
