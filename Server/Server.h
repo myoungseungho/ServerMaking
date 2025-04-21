@@ -64,6 +64,12 @@ private:
         case CMD_LEFT:  st.x -= 1; break;
         case CMD_RIGHT: st.x += 1; break;
         }
+
+        // ⏱️ 부하 추가 (가벼운 연산 반복)
+        volatile int dummy = 0;
+        for (int i = 0; i < 50000000; ++i) {
+            dummy += i % 3;
+        }
     }
 
 public:
