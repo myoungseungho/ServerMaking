@@ -3,6 +3,8 @@
 #include <sstream>
 #include <conio.h>
 
+
+
 CServer::CServer() {
     WSAData wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
@@ -70,8 +72,26 @@ void CServer::broadcastStates() {
     }
 }
 
+void CServer::consumeInputQueue() {
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+        std::lock_guard<std::mutex> lock(queueMutex);
+        for (std::unordered_map<int, std::queue<ClientCommand>>::iterator it = inputQueues.begin(); it != inputQueues.end(); ++it) {
+            int id = it->first;
+            std::queue<ClientCommand>& queue = it->second;
+            while (!queue.empty()) {
+                processCommand(queue.front(), id);
+                queue.pop();
+            }
+        }
+    }
+}
+
+
 
 void CServer::start() {
+
     using clock = std::chrono::high_resolution_clock;
     auto frameDur = std::chrono::milliseconds(1000 / LOGIC_HZ);
     auto bcInt = std::chrono::milliseconds(1000 / BROADCAST_HZ);
@@ -79,8 +99,11 @@ void CServer::start() {
 
     int messageCount = 0;
 
+    if (useThreadedProcessing) {
+        std::thread(&CServer::consumeInputQueue, this).detach();
+    }
+
     while (true) {
-        // 🔄 키 입력 체크: I 키로 입력큐 토글
         if (_kbhit()) {
             int ch = _getch();
             if (ch == 'I' || ch == 'i') {
@@ -127,25 +150,15 @@ void CServer::start() {
             }
 
             if (useInputQueue) {
-                inputQueues[id].push(cmd); // 📨 입력큐에 저장
+                std::lock_guard<std::mutex> lock(queueMutex);
+                inputQueues[id].push(cmd);
             }
             else {
-                processCommand(cmd, id);   // ⚡ 즉시 처리
+                processCommand(cmd, id);
             }
 
             sendto(serverSocket, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
                 reinterpret_cast<sockaddr*>(&cl), len);
-        }
-
-        if (useInputQueue) {
-            for (auto& pair : inputQueues) {
-                int clientId = pair.first;
-                auto& queue = pair.second;
-                while (!queue.empty()) {
-                    processCommand(queue.front(), clientId);
-                    queue.pop();
-                }
-            }
         }
 
         if (debugMessagesPerFrame) {
@@ -153,6 +166,7 @@ void CServer::start() {
             std::cout << "[Debug] Messages this frame: " << messageCount << (useInputQueue ? " (입력큐)" : "") << std::endl;
             SetColor(7);
         }
+
         if (debugPacketLoss) {
             for (const auto& pair : expectedSeqMap) {
                 int id = pair.first;
@@ -163,6 +177,19 @@ void CServer::start() {
                 std::cout << "[Debug] Client " << id << " Packet loss: "
                     << lost << "/" << expected << " (" << lossRate << "% )" << (useInputQueue ? " (입력큐)" : "") << std::endl;
                 SetColor(7);
+            }
+        }
+
+        // 입력큐가 사용되고, 스레드 분리가 꺼져 있다면 → 메인스레드가 직접 큐 처리
+        if (useInputQueue && !useThreadedProcessing) {
+            std::lock_guard<std::mutex> lock(queueMutex);
+            for (std::unordered_map<int, std::queue<ClientCommand>>::iterator it = inputQueues.begin(); it != inputQueues.end(); ++it) {
+                int id = it->first;
+                std::queue<ClientCommand>& queue = it->second;
+                while (!queue.empty()) {
+                    processCommand(queue.front(), id);
+                    queue.pop();
+                }
             }
         }
 
