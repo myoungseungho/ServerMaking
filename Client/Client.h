@@ -18,16 +18,22 @@
 #define SERVER_PORT 8888
 #define BUFFER_SIZE 1500
 
-// 서버가 보내는 ACK/NACK 패킷 구조
-struct AckPacket {
-    int clientId;
-    int ackSequenceId;
-};
+// 공통 헤더 ---------------------------------------------------
+enum : uint8_t { PKT_ACK = 1, PKT_NACK = 2 };
 
-struct NackPacket {
-    int clientId;
-    int missingSequenceId;
+// ack/nack 구조체 --------------------------------------------
+#pragma pack(push, 1)          // 구조체를 1바이트 단위로 정렬
+struct AckPacket {
+    uint8_t type = PKT_ACK;    // ← 새 필드
+    int  clientId;
+    int  ackSequenceId;
 };
+struct NackPacket {
+    uint8_t type = PKT_NACK;   // ← 새 필드
+    int  clientId;
+    int  missingSequenceId;
+};
+#pragma pack(pop)
 
 enum Command { CMD_UP, CMD_DOWN, CMD_LEFT, CMD_RIGHT };
 

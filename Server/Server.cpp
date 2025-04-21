@@ -76,7 +76,7 @@ void CServer::sendAck(const sockaddr_in& cl, int clientId, int seq) {
     }
 
     // 실제 ACK 전송
-    AckPacket ack{ clientId, seq };
+    AckPacket ack{ PKT_ACK, clientId, seq };
     sendto(serverSocket,
         reinterpret_cast<char*>(&ack), sizeof(ack),
         0, reinterpret_cast<const sockaddr*>(&cl), sizeof(cl));
@@ -119,7 +119,8 @@ void CServer::sendNack(const sockaddr_in& cl, int clientId, int missingSeq) {
         }
         return;
     }
-    NackPacket nack{ clientId, missingSeq };
+
+    NackPacket nack{ PKT_NACK, clientId, missingSeq };
     sendto(serverSocket,
         reinterpret_cast<char*>(&nack), sizeof(nack),
         0, reinterpret_cast<const sockaddr*>(&cl), sizeof(cl));

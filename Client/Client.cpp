@@ -28,49 +28,57 @@ void CClient::start() {
         while (true) {
             int bytes = recvfrom(clientSocket, buffer, BUFFER_SIZE, 0,
                 reinterpret_cast<sockaddr*>(&fromAddr), &fromLen);
+
             if (bytes <= 0) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 continue;
             }
 
-            // ACK 수신 처리
-            if (enableAckNack && bytes == sizeof(AckPacket)) {
+            // 최소한 1바이트는 타입 정보여야 한다
+            uint8_t type = buffer[0];
+
+            switch (type) {
+            case PKT_ACK: {
+                if (bytes < sizeof(AckPacket)) break; // 방어 코드
                 AckPacket ack;
                 memcpy(&ack, buffer, sizeof(ack));
                 std::lock_guard<std::mutex> lock(ackMutex);
                 pendingCommands.erase(ack.ackSequenceId);
-                continue;
+                break;
             }
-            // NACK 수신 처리
-            if (enableAckNack && bytes == sizeof(NackPacket)) {
+            case PKT_NACK: {
+                if (bytes < sizeof(NackPacket)) break;
                 NackPacket nack;
                 memcpy(&nack, buffer, sizeof(nack));
                 std::lock_guard<std::mutex> lock(ackMutex);
                 auto it = pendingCommands.find(nack.missingSequenceId);
                 if (it != pendingCommands.end()) {
-                    // 재전송
-                    auto& msg = it->second;
-                    sendto(clientSocket, reinterpret_cast<char*>(&msg), sizeof(msg), 0,
-                        reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
+                    sendto(clientSocket,
+                        reinterpret_cast<char*>(&it->second), sizeof(it->second),
+                        0, reinterpret_cast<sockaddr*>(&serverAddr),
+                        sizeof(serverAddr));
                 }
-                continue;
+                break;
             }
-
-            // RTT 디버그 혹은 브로드캐스트 메시지 처리
-            if (debugRTT && bytes == sizeof(ClientCommand)) {
-                ClientCommand echo;
-                memcpy(&echo, buffer, sizeof(echo));
-                auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::system_clock::now().time_since_epoch()).count();
-                SetColor(10);
-                std::cout << "[Debug RTT] " << (now - echo.timestamp) << " ms" << std::endl;
-                SetColor(7);
+            default: {
+                // 이건 RTT 디버그 혹은 일반 메시지
+                if (debugRTT && bytes == sizeof(ClientCommand)) {
+                    ClientCommand echo;
+                    memcpy(&echo, buffer, sizeof(echo));
+                    auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now().time_since_epoch()).count();
+                    SetColor(10);
+                    std::cout << "[Debug RTT] " << (now - echo.timestamp) << " ms" << std::endl;
+                    SetColor(7);
+                }
+                else {
+                    std::cout << "[서버 브로드캐스트] ";
+                    SetColor(11);
+                    std::cout << buffer << std::endl;
+                    SetColor(7);
+                }
+                break;
             }
-            else {
-                std::cout << "[서버 브로드캐스트] ";
-                SetColor(11);
-                std::cout << buffer << std::endl;
-                SetColor(7);
             }
         }
         });

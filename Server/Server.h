@@ -25,6 +25,8 @@
 #define BROADCAST_HZ         20
 #define PACKET_LOSS_PERCENT  10     // 손실 시뮬레이션 비율 (%)
 
+enum : uint8_t { PKT_ACK = 1, PKT_NACK = 2 };
+
 // 각 클라이언트 상태
 struct PlayerState {
     float x = 0.0f;
@@ -43,9 +45,19 @@ struct ClientCommand {
     long long timestamp;
 };
 
-// ACK/NACK 패킷 구조
-struct AckPacket { int clientId; int ackSequenceId; };
-struct NackPacket { int clientId; int missingSequenceId; };
+// ack/nack 구조체 --------------------------------------------
+#pragma pack(push, 1)          // 구조체를 1바이트 단위로 정렬
+struct AckPacket {
+    uint8_t type = PKT_ACK;    // ← 새 필드
+    int  clientId;
+    int  ackSequenceId;
+};
+struct NackPacket {
+    uint8_t type = PKT_NACK;   // ← 새 필드
+    int  clientId;
+    int  missingSequenceId;
+};
+#pragma pack(pop)
 
 class CServer {
 private:
