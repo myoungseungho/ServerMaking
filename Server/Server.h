@@ -13,6 +13,8 @@
 #include <queue>
 #include <thread>
 #include <mutex>
+#include <conio.h>
+#include <cstdlib> // 패킷 손실 시뮬레이션용
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -44,10 +46,11 @@ private:
     // === Debug Options ===
    // 토글 가능 디버깅 요소
     bool debugMessagesPerFrame = false;  // 한 프레임당 메시지 수 측정
-    bool debugPacketLoss = false;  // 패킷 손실률 측정
-    bool debugInputQueue = true;  // 입력 큐 깊이 및 대기 시간 측정
-    bool useInputQueue = true; //  입력큐 사용 여부 토글
+    bool debugPacketLoss = true;  // 패킷 손실률 측정
+    bool debugInputQueue = false;  // 입력 큐 깊이 및 대기 시간 측정
+    bool useInputQueue = false; //  입력큐 사용 여부 토글
     bool useThreadedProcessing = false; // ⛓️ 스레드 분기 여부
+    bool simulatePacketLoss = true;     // 🧪 패킷 손실 시뮬레이션 추가
 
     SOCKET serverSocket;
     sockaddr_in serverAddr;
@@ -71,10 +74,10 @@ private:
         }
 
         // ⏱️ 부하 추가 (가벼운 연산 반복)
-        volatile int dummy = 0;
+      /*  volatile int dummy = 0;
         for (int i = 0; i < 30000000; ++i) {
             dummy += i % 3;
-        }
+        }*/
     }
 
     void consumeInputQueue();

@@ -91,7 +91,6 @@ void CServer::consumeInputQueue() {
 
 
 void CServer::start() {
-
     using clock = std::chrono::high_resolution_clock;
     auto frameDur = std::chrono::milliseconds(1000 / LOGIC_HZ);
     auto bcInt = std::chrono::milliseconds(1000 / BROADCAST_HZ);
@@ -125,6 +124,9 @@ void CServer::start() {
             int b = recvfrom(serverSocket, buf, BUFFER_SIZE, 0,
                 reinterpret_cast<sockaddr*>(&cl), &len);
             if (b <= 0) continue;
+
+            // 🧪 패킷 손실 시뮬레이션
+            if (simulatePacketLoss && (rand() % 100) < 30) continue;
 
             if (debugMessagesPerFrame) ++messageCount;
 
@@ -180,7 +182,6 @@ void CServer::start() {
             }
         }
 
-        // 입력큐가 사용되고, 스레드 분리가 꺼져 있다면 → 메인스레드가 직접 큐 처리
         if (useInputQueue && !useThreadedProcessing) {
             std::lock_guard<std::mutex> lock(queueMutex);
             for (std::unordered_map<int, std::queue<ClientCommand>>::iterator it = inputQueues.begin(); it != inputQueues.end(); ++it) {
