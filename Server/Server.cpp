@@ -155,27 +155,36 @@ void CServer::start() {
     auto bcInt = std::chrono::milliseconds(1000 / BROADCAST_HZ);
     auto nextBC = clock::now();
 
-    if (useThreadedProc) std::thread(&CServer::consumeInputQueue, this).detach();
+    if (useThreadedProc)
+        std::thread(&CServer::consumeInputQueue, this).detach();
 
     while (true) {
+        // (1) 콘솔 입력 토글 처리
         if (_kbhit()) {
             int ch = _getch();
             if (ch == 'A' || ch == 'a') {
                 enableAckNack = !enableAckNack;
-                std::cout << "[Info] ACK/NACK 기능: " << (enableAckNack ? "ON" : "OFF") << std::endl;
+                std::cout << "[Info] ACK/NACK 기능: "
+                    << (enableAckNack ? "ON" : "OFF") << std::endl;
             }
             else if (ch == 'I' || ch == 'i') {
                 useInputQueue = !useInputQueue;
             }
         }
+
+        // (2) 한 프레임 동안 패킷 수신/버퍼링/처리
         auto startTime = clock::now();
         char buf[BUFFER_SIZE];
         sockaddr_in cl;
         int len = sizeof(cl);
+
         while (clock::now() - startTime < frameDur) {
             int bytes = recvfrom(serverSocket, buf, BUFFER_SIZE, 0,
                 reinterpret_cast<sockaddr*>(&cl), &len);
-            if (bytes <= 0) continue;
+            if (bytes <= 0)
+                continue;
+
+            // (2.1) 패킷 손실 시뮬레이션
             if (simulatePacketLoss && (rand() % 100) < PACKET_LOSS_PERCENT) {
                 if (debugPacketLoss) {
                     SetColor(12);
@@ -184,39 +193,76 @@ void CServer::start() {
                 }
                 continue;
             }
-            if (isNewClient(cl)) clients.push_back(cl);
+
+            // (2.2) 신규 클라이언트 등록
+            if (isNewClient(cl))
+                clients.push_back(cl);
+
+            // (2.3) 수신된 데이터 파싱
             ClientCommand cmd;
             memcpy(&cmd, buf, sizeof(cmd));
             int id = getClientNumber(cl);
 
-            // 누락 감지 & 요청
-            if (cmd.sequenceId != expectedSeqMap[id]) {
-                for (int m = expectedSeqMap[id]; m < cmd.sequenceId; ++m) {
-                    ++lostPacketMap[id];
-                    if (debugPacketLoss) {
-                        SetColor(12);
-                        std::cout << "[Debug] Detected missing packet " << m
-                            << " for client " << id
-                            << ", lost count now " << lostPacketMap[id] << std::endl;
-                        SetColor(7);
-                    }
-                    if (enableAckNack) sendNack(cl, id, m);
-                }
-            }
-            expectedSeqMap[id] = cmd.sequenceId + 1;
-
-            // ACK 전송 (내부에서 복구)
+            // (2.4) ACK는 받은 모든 패킷에 대해 즉시!
             sendAck(cl, id, cmd.sequenceId);
 
-            if (useInputQueue) {
-                std::lock_guard<std::mutex> lock(queueMutex);
-                inputQueues[id].push(cmd);
+            // (2.5) 누락 감지 & NACK 요청
+            int& expect = expectedSeqMap[id];
+            // 처음 생긴 키는 0 → 1로 초기화
+            if (expect == 0) expect = 1;
+
+            if (enableAckNack && cmd.sequenceId > expect) {
+                for (int miss = expect; miss < cmd.sequenceId; ++miss) {
+                    if (!bufferedCommands[id].count(miss)) {
+                        if (debugPacketLoss) {
+                            SetColor(12);
+                            std::cout << "[Debug] Detected missing packet "
+                                << miss << " for client " << id << std::endl;
+                            SetColor(7);
+                        }
+                        sendNack(cl, id, miss);
+                        ++lostPacketMap[id];
+                    }
+                }
+            }
+
+            // (2.6) **순서 보정용 버퍼링 & 처리** 
+            if (cmd.sequenceId < expect) {
+                // 이미 처리된 과거 패킷: 무시
+            }
+            else if (cmd.sequenceId == expect) {
+                // 딱 기대한 번호: 즉시 처리
+                if (useInputQueue) {
+                    std::lock_guard<std::mutex> lock(queueMutex);
+                    inputQueues[id].push(cmd);
+                }
+                else {
+                    processCommand(cmd, id);
+                }
+                ++expect;
+
+                // 버퍼에 쌓인 나머지 연속 번호도 처리
+                auto& bufMap = bufferedCommands[id];
+                while (bufMap.count(expect)) {
+                    const ClientCommand& nextCmd = bufMap[expect];
+                    if (useInputQueue) {
+                        std::lock_guard<std::mutex> lock(queueMutex);
+                        inputQueues[id].push(nextCmd);
+                    }
+                    else {
+                        processCommand(nextCmd, id);
+                    }
+                    bufMap.erase(expect);
+                    ++expect;
+                }
             }
             else {
-                processCommand(cmd, id);
+                // 미래 패킷: 버퍼에 저장
+                bufferedCommands[id][cmd.sequenceId] = cmd;
             }
         }
 
+        // (3) 디버그용 로그
         if (debugPacketLoss) {
             SetColor(14);
             for (auto& p : expectedSeqMap) {
@@ -226,10 +272,12 @@ void CServer::start() {
                 double rate = exp > 0 ? (lost * 100.0 / exp) : 0.0;
                 std::cout << "[Debug] Client " << cid
                     << " Packet loss: " << lost << "/" << exp
-                    << " (" << rate << "% )" << std::endl;
+                    << " (" << rate << "%)" << std::endl;
             }
             SetColor(7);
         }
+
+        // (4) 상태 브로드캐스트
         if (clock::now() >= nextBC) {
             broadcastStates();
             nextBC = clock::now() + bcInt;

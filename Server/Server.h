@@ -16,7 +16,7 @@
 #include <conio.h>
 #include <cstdlib>      // rand(), srand()
 #include <ctime>        // time()
-
+#include <map>
 #pragma comment(lib, "ws2_32.lib")
 
 #define SERVER_PORT          8888
@@ -69,6 +69,7 @@ private:
     std::unordered_map<int, int> expectedSeqMap;
     std::unordered_map<int, int> lostPacketMap;
     std::unordered_map<int, std::queue<ClientCommand>> inputQueues;
+    std::unordered_map<int, std::map<int, ClientCommand>> bufferedCommands;
     std::mutex queueMutex;
 
     // 옵션 및 디버깅 플래그
